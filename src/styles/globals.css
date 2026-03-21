@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: theme('colors.background');
+    color: white;
+    font-family: theme('fontFamily.sans');
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
+@layer utilities {
+  .neon-border-cyan {
+    border: 1px solid theme('colors.neon.cyan');
+    box-shadow: 0 0 5px theme('colors.neon.cyan'), inset 0 0 5px theme('colors.neon.cyan');
+  }
+
+  .neon-border-magenta {
+    border: 1px solid theme('colors.neon.magenta');
+    box-shadow: 0 0 5px theme('colors.neon.magenta'), inset 0 0 5px theme('colors.neon.magenta');
+  }
+
+  .neon-text-cyan {
+    text-shadow: 0 0 5px theme('colors.neon.cyan');
+  }
+
+  .neon-text-magenta {
+    text-shadow: 0 0 8px theme('colors.neon.magenta');
+  }
+
+  /* Cyberpunk panel background */
+  .panel-bg {
+    background: rgba(8, 11, 20, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+}
+
+/* Scanline Effect Overlay */
+.scanlines::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  z-index: 50;
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Chromatic Aberration */
+.chromatic {
+  text-shadow: 2px 0 0 rgba(255, 0, 0, 0.5), -2px 0 0 rgba(0, 255, 255, 0.5);
+}
+
+@keyframes boxScan {
+  0% { transform: translateY(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(176px); opacity: 0; }
+}
