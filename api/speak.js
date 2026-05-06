@@ -1,15 +1,30 @@
 // Vercel serverless function — converts text to speech using Groq Orpheus TTS.
 // Returns audio/wav binary stream.
-// Note: Orpheus has a 200 character input limit — we truncate accordingly.
+// Orpheus has a 200 character input limit — we send first 1-2 sentences only.
 
 function sanitizeForTTS(text) {
   return text
     .replace(/\*/g, '')           // remove markdown bold/italic asterisks
-    .replace(/["""]/g, '"')       // normalize smart quotes to straight quotes
+    .replace(/["""]/g, '"')       // normalize smart quotes
     .replace(/[''']/g, "'")       // normalize smart apostrophes
-    .replace(/[^\x00-\x7F]/g, '') // strip non-ASCII characters
+    .replace(/[^\x00-\x7F]/g, '') // strip non-ASCII
     .replace(/\s+/g, ' ')         // collapse whitespace
     .trim();
+}
+
+function extractFirstSentences(text, maxChars = 180) {
+  // Split on sentence boundaries
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  let result = '';
+  for (const sentence of sentences) {
+    if ((result + sentence).length > maxChars) break;
+    result += sentence;
+  }
+  // If even the first sentence is too long, truncate at word boundary
+  if (!result) {
+    result = text.substring(0, maxChars).replace(/\s\S*$/, '...');
+  }
+  return result.trim();
 }
 
 export default async function handler(req, res) {
@@ -38,13 +53,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'No text provided.' });
   }
 
-  // Sanitize — remove special chars that can cause Groq 500s
+  // Sanitize then extract first complete sentences up to 180 chars
   text = sanitizeForTTS(text);
-
-  // Orpheus hard limit is 200 characters — truncate at word boundary
-  if (text.length > 190) {
-    text = text.substring(0, 190).replace(/\s\S*$/, '...');
-  }
+  text = extractFirstSentences(text, 180);
 
   if (!text) {
     return res.status(400).json({ error: 'Text empty after sanitization.' });
