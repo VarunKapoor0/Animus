@@ -24,7 +24,7 @@ The microphone knows what it does for a living. The coffee mug has thoughts abou
 
 | Object detected | Conversation active |
 |---|---|
-| ![Object card floating over microphone](screenshot_card.png) | ![Chat with studio microphone](screenshot_chat.png) |
+| ![Object card floating over microphone](screenshot_card.PNG) | ![Chat with studio microphone](screenshot_chat.PNG) |
 
 ---
 
