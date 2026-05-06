@@ -43,7 +43,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: 'canopylabs/orpheus-v1-english',
         input: text,
-        voice: 'diana', // expressive female voice — good for dramatic/character speech
+        voice: 'diana',
         response_format: 'wav',
       }),
     });
@@ -51,7 +51,8 @@ export default async function handler(req, res) {
     if (!response.ok) {
       const err = await response.text();
       console.error('Groq TTS error:', err);
-      return res.status(500).json({ error: 'TTS failed.', detail: err });
+      // Return 503 specifically so client knows to fall back to Web Speech
+      return res.status(503).json({ error: 'TTS unavailable.', detail: err });
     }
 
     const audioBuffer = await response.arrayBuffer();
@@ -61,6 +62,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('Speak handler error:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+    return res.status(503).json({ error: 'TTS unavailable.' });
   }
 }
