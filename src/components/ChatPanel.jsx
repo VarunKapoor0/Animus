@@ -21,7 +21,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
   // Auto-play opening line when chat panel mounts
   useEffect(() => {
     if (visionData.opening_line) {
-      speakReply(visionData.opening_line);
+      speakReply(visionData.opening_line, 'english');
     }
     return () => stopAudio();
   }, []);
@@ -48,11 +48,13 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
     setInputVal('');
     setIsTyping(true);
 
-    const reply = await sendMessage(text);
+    const result = await sendMessage(text);
 
-    if (reply) {
-      setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
-      speakReply(reply);
+    if (result) {
+      const replyText = result.text || result;
+      const replyLang = result.language || 'english';
+      setMessages(prev => [...prev, { role: 'assistant', text: replyText }]);
+      speakReply(replyText, replyLang);
     } else {
       setMessages(prev => [...prev, { role: 'assistant', text: '[CONNECTION LOST... UNABLE TO RESPOND]' }]);
     }
@@ -64,34 +66,43 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
     handleSend();
   };
 
-  // TTS — try Groq Orpheus first, fall back to Web Speech on failure
-  const speakReply = async (text) => {
+  // TTS routing:
+  // English — try Groq Orpheus, fall back to Web Speech
+  // Non-English — go straight to Web Speech (Orpheus is English only)
+  const speakReply = async (text, language = 'english') => {
     stopAudio();
-    try {
-      const response = await fetch('/api/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-      });
 
-      if (response.ok) {
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        currentAudioRef.current = audio;
-        audio.onended = () => URL.revokeObjectURL(audioUrl);
-        audio.play();
-        return;
+    const isEnglish = !language || language === 'english' || language === 'en';
+
+    if (isEnglish) {
+      try {
+        const response = await fetch('/api/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+
+        if (response.ok) {
+          const audioBlob = await response.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          currentAudioRef.current = audio;
+          audio.onended = () => URL.revokeObjectURL(audioUrl);
+          audio.play();
+          return;
+        }
+      } catch (err) {
+        console.warn('Groq TTS failed, falling back to Web Speech:', err);
       }
-    } catch (err) {
-      console.warn('Groq TTS failed, falling back to Web Speech:', err);
     }
 
-    // Fallback: Web Speech API
+    // Web Speech fallback — used for non-English and when Groq fails
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.95;
       utterance.pitch = 1.0;
+      // Set language hint so browser picks the right voice
+      if (!isEnglish) utterance.lang = language;
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -203,7 +214,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
             } disabled:opacity-30 disabled:cursor-not-allowed`}
             title="Hold to speak"
           >
-            {isRecording ? '●' : '🎙'}
+            {isRecording ? '\u25cf' : '\ud83c\udf99'}
           </button>
 
            <input 
@@ -211,7 +222,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
              value={inputVal}
              onChange={e => setInputVal(e.target.value)}
              className="flex-1 bg-transparent border border-neon-cyan/50 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-neon-cyan shadow-[inset_0_0_5px_rgba(0,245,255,0.1)] transition-colors placeholder-gray-600"
-             placeholder={isRecording ? 'Recording...' : isTranscribing ? 'Transcribing...' : 'Type or hold 🎙 to speak...'}
+             placeholder={isRecording ? 'Recording...' : isTranscribing ? 'Transcribing...' : 'Type or hold \ud83c\udf99 to speak...'}
              disabled={isRecording || isTranscribing}
              maxLength={250}
            />
@@ -224,7 +235,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
            </button>
         </div>
         <div className="mt-2 text-[10px] font-mono text-gray-600 text-center">
-          {isRecording ? '● RECORDING — release to send' : 'Hold 🎙 to speak · Type to transmit'}
+          {isRecording ? '\u25cf RECORDING \u2014 release to send' : 'Hold \ud83c\udf99 to speak \u00b7 Type to transmit'}
         </div>
       </form>
     </div>

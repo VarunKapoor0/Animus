@@ -48,7 +48,6 @@ export default function useGemini() {
     return true;
   }, []);
 
-  // Transcribe audio blob via Groq Whisper
   const transcribeAudio = useCallback(async (audioBlob) => {
     try {
       const arrayBuffer = await audioBlob.arrayBuffer();
@@ -63,13 +62,10 @@ export default function useGemini() {
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Transcription failed');
-      }
+      if (!response.ok) throw new Error('Transcription failed');
 
       const data = await response.json();
       
-      // Update detected language in chat state
       if (data.language) {
         setChatState(prev => prev ? { ...prev, language: data.language } : prev);
       }
@@ -94,7 +90,7 @@ export default function useGemini() {
             personality: chatState.personalitySummary,
             history: chatState.history,
             message,
-            language: chatState.language, // pass detected language
+            language: chatState.language,
           }
         })
       });
@@ -112,7 +108,8 @@ export default function useGemini() {
         ]
       }));
 
-      return data.text;
+      // Return both text and language so ChatPanel can route TTS correctly
+      return { text: data.text, language: data.language || chatState.language };
     } catch (err) {
       console.error("Chat Message Error:", err);
       setError("Signal lost. Cannot respond.");
