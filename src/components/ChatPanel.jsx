@@ -12,17 +12,14 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
   const endOfChatRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const currentAudioRef = useRef(null); // track playing audio for cleanup
+  const currentAudioRef = useRef(null);
 
   useEffect(() => {
     endOfChatRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // Cleanup audio on unmount (when chat panel closes)
   useEffect(() => {
-    return () => {
-      stopAudio();
-    };
+    return () => stopAudio();
   }, []);
 
   const stopAudio = () => {
@@ -31,6 +28,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
       currentAudioRef.current.src = '';
       currentAudioRef.current = null;
     }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   };
 
   const handleClose = () => {
@@ -62,31 +60,38 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
     handleSend();
   };
 
-  // TTS via Groq — natural sounding, same API key
+  // TTS — try Groq Orpheus first, fall back to Web Speech on failure
   const speakReply = async (text) => {
+    stopAudio();
     try {
-      stopAudio(); // stop any currently playing audio
-
       const response = await fetch('/api/speak', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       });
 
-      if (!response.ok) return;
-
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      currentAudioRef.current = audio;
-      audio.onended = () => URL.revokeObjectURL(audioUrl);
-      audio.play();
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        currentAudioRef.current = audio;
+        audio.onended = () => URL.revokeObjectURL(audioUrl);
+        audio.play();
+        return;
+      }
     } catch (err) {
-      console.error('TTS error:', err);
+      console.warn('Groq TTS failed, falling back to Web Speech:', err);
+    }
+
+    // Fallback: Web Speech API
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
     }
   };
 
-  // Start recording
   const startRecording = async () => {
     if (isTyping || isTranscribing) return;
     try {
@@ -126,7 +131,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
 
   return (
     <div className="absolute inset-0 m-4 sm:m-8 panel-bg border border-neon-cyan/50 flex flex-col pointer-events-auto shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden">
-      {/* Header */}
       <div className="bg-neon-cyan/10 border-b border-neon-cyan/30 px-4 py-3 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse"></div>
@@ -142,7 +146,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
         </button>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-sm custom-scrollbar">
         {messages.map((msg, i) => (
           <div 
@@ -180,7 +183,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
         <div ref={endOfChatRef} />
       </div>
 
-      {/* Input */}
       <form onSubmit={handleFormSubmit} className="p-4 bg-black/60 border-t border-neon-cyan/20">
         <div className="flex gap-2">
           <button
