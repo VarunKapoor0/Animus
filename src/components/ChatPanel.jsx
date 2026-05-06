@@ -12,10 +12,31 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
   const endOfChatRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const currentAudioRef = useRef(null); // track playing audio for cleanup
 
   useEffect(() => {
     endOfChatRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
+
+  // Cleanup audio on unmount (when chat panel closes)
+  useEffect(() => {
+    return () => {
+      stopAudio();
+    };
+  }, []);
+
+  const stopAudio = () => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.src = '';
+      currentAudioRef.current = null;
+    }
+  };
+
+  const handleClose = () => {
+    stopAudio();
+    onClose();
+  };
 
   const handleSend = async (messageText) => {
     const text = messageText || inputVal;
@@ -29,7 +50,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
 
     if (reply) {
       setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
-      // Speak the reply using Web Speech API
       speakReply(reply);
     } else {
       setMessages(prev => [...prev, { role: 'assistant', text: '[CONNECTION LOST... UNABLE TO RESPOND]' }]);
@@ -42,14 +62,28 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
     handleSend();
   };
 
-  // Text-to-speech using Web Speech API
-  const speakReply = (text) => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel(); // cancel any ongoing speech
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    utterance.pitch = 1.0;
-    window.speechSynthesis.speak(utterance);
+  // TTS via Groq — natural sounding, same API key
+  const speakReply = async (text) => {
+    try {
+      stopAudio(); // stop any currently playing audio
+
+      const response = await fetch('/api/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+
+      if (!response.ok) return;
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      currentAudioRef.current = audio;
+      audio.onended = () => URL.revokeObjectURL(audioUrl);
+      audio.play();
+    } catch (err) {
+      console.error('TTS error:', err);
+    }
   };
 
   // Start recording
@@ -83,7 +117,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
     }
   };
 
-  // Stop recording
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
@@ -102,7 +135,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
           </span>
         </div>
         <button 
-          onClick={onClose}
+          onClick={handleClose}
           className="text-gray-400 hover:text-neon-magenta transition-colors font-mono text-sm uppercase px-2 py-1"
         >
           [Terminate]
@@ -150,7 +183,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
       {/* Input */}
       <form onSubmit={handleFormSubmit} className="p-4 bg-black/60 border-t border-neon-cyan/20">
         <div className="flex gap-2">
-          {/* Mic button — hold to record */}
           <button
             type="button"
             onMouseDown={startRecording}
