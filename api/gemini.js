@@ -2,11 +2,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const apiKey = process.env.GEMINI_API_KEY;
 
-// Try primary model first, fall back to lite on 503/overload
 const PRIMARY_MODEL = "gemini-2.5-flash";
 const FALLBACK_MODEL = "gemini-2.5-flash-lite";
 
-// Simple in-memory rate limiting
 const ipRequests = new Map();
 const RATE_LIMIT_WINDOW = 60 * 1000;
 const MAX_REQUESTS = 10;
@@ -22,6 +20,14 @@ function checkRateLimit(ip) {
   }
   ipRequests.set(ip, record);
   return record.count <= MAX_REQUESTS;
+}
+
+// Whisper sometimes detects Hindi as Urdu — normalize to Hindi
+function normalizeLanguage(lang) {
+  if (!lang) return 'english';
+  const l = lang.toLowerCase();
+  if (l === 'ur' || l === 'urdu') return 'hindi';
+  return lang;
 }
 
 const SYSTEM_PROMPT_VISION = `
@@ -54,7 +60,6 @@ Keep responses conversational — 2 to 4 sentences unless the user asks for more
 ${language && language !== 'english' ? `IMPORTANT: The user is speaking ${language}. You MUST respond in ${language}.` : ''}
 `;
 
-// Attempt a Gemini call with automatic fallback to lite model on 503
 async function withFallback(genAI, primaryFn, fallbackFn) {
   try {
     return await primaryFn(genAI.getGenerativeModel({ model: PRIMARY_MODEL }));
@@ -115,7 +120,8 @@ export default async function handler(req, res) {
       return res.status(200).json(parsed);
 
     } else if (action === 'chat') {
-      const { message, history, objectType, personality, language } = payload;
+      const { message, history, objectType, personality } = payload;
+      const language = normalizeLanguage(payload.language);
       const systemInstruction = SYSTEM_PROMPT_CHAT(objectType, personality, language);
 
       const result = await withFallback(
@@ -133,7 +139,8 @@ export default async function handler(req, res) {
       );
 
       const responseText = result.response.text();
-      return res.status(200).json({ text: responseText });
+      // Return language so client knows whether to use Orpheus or Web Speech
+      return res.status(200).json({ text: responseText, language });
 
     } else {
       return res.status(400).json({ error: 'Invalid action provided.' });
