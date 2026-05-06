@@ -3,8 +3,6 @@ import { useState, useCallback } from 'react';
 export default function useGemini() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
-  
-  // To keep chat state since the backend is stateless
   const [chatState, setChatState] = useState(null);
 
   const identifyObject = useCallback(async (base64Image) => {
@@ -19,10 +17,7 @@ export default function useGemini() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'vision',
-          payload: {
-            image: base64Data,
-            mimeType: mimeType
-          }
+          payload: { image: base64Data, mimeType }
         })
       });
 
@@ -49,13 +44,41 @@ export default function useGemini() {
   }, []);
 
   const startConversation = useCallback(async (objectType, personalitySummary) => {
-    // Just initialize the state locally, backend is stateless
-    setChatState({
-      objectType,
-      personalitySummary,
-      history: []
-    });
+    setChatState({ objectType, personalitySummary, history: [], language: 'english' });
     return true;
+  }, []);
+
+  // Transcribe audio blob via Groq Whisper
+  const transcribeAudio = useCallback(async (audioBlob) => {
+    try {
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audio: base64,
+          mimeType: audioBlob.type || 'audio/webm',
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Transcription failed');
+      }
+
+      const data = await response.json();
+      
+      // Update detected language in chat state
+      if (data.language) {
+        setChatState(prev => prev ? { ...prev, language: data.language } : prev);
+      }
+
+      return data.transcript;
+    } catch (err) {
+      console.error('Transcription error:', err);
+      return null;
+    }
   }, []);
 
   const sendMessage = useCallback(async (message) => {
@@ -70,18 +93,16 @@ export default function useGemini() {
             objectType: chatState.objectType,
             personality: chatState.personalitySummary,
             history: chatState.history,
-            message: message
+            message,
+            language: chatState.language, // pass detected language
           }
         })
       });
 
-      if (!response.ok) {
-        throw new Error("Signal lost. Cannot respond.");
-      }
+      if (!response.ok) throw new Error("Signal lost. Cannot respond.");
 
       const data = await response.json();
       
-      // Update local history
       setChatState(prev => ({
         ...prev,
         history: [
@@ -105,6 +126,7 @@ export default function useGemini() {
     identifyObject,
     startConversation,
     sendMessage,
+    transcribeAudio,
     hasActiveChat: !!chatState
   };
 }

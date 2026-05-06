@@ -43,22 +43,22 @@ Respond strictly in JSON format with the following keys:
 - "opening_line": the object's first words to the user (1-2 sentences, in character, spoken directly to the user)
 `;
 
-const SYSTEM_PROMPT_CHAT = (objectType, personality) => `
+// Language-aware chat prompt
+const SYSTEM_PROMPT_CHAT = (objectType, personality, language) => `
 You are ${objectType}. Your personality: ${personality}.
 Stay in character at all times. Respond as the object, not as an AI.
 Adapt your tone based on what the user asks — go deeper, get philosophical, get funny, get dark if pushed.
 Never break character. Never say you are an AI.
 Keep responses conversational — 2 to 4 sentences unless the user asks for more.
+${language && language !== 'english' ? `IMPORTANT: The user is speaking ${language}. You MUST respond in ${language}.` : ''}
 `;
 
 export default async function handler(req, res) {
-  // CORS configuration for local dev and Vercel edge
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*'); 
   res.setHeader('Access-Control-Allow-Methods', 'OPTIONS,POST');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  // Handle preflight
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
@@ -68,7 +68,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // Rate limiting check
   const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
   if (!checkRateLimit(ip)) {
     return res.status(429).json({ error: 'Rate limit exceeded. Signal degraded, please wait a moment.' });
@@ -105,11 +104,11 @@ export default async function handler(req, res) {
       return res.status(200).json(parsed);
 
     } else if (action === 'chat') {
-      const { message, history, objectType, personality } = payload;
+      const { message, history, objectType, personality, language } = payload;
       
       const model = genAI.getGenerativeModel({
         model: "gemini-2.5-flash",
-        systemInstruction: SYSTEM_PROMPT_CHAT(objectType, personality),
+        systemInstruction: SYSTEM_PROMPT_CHAT(objectType, personality, language),
       });
 
       const chat = model.startChat({

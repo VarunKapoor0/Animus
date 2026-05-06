@@ -1,35 +1,94 @@
 import { useState, useRef, useEffect } from 'react';
 import GlitchText from './GlitchText';
 
-export default function ChatPanel({ visionData, sendMessage, onClose }) {
+export default function ChatPanel({ visionData, sendMessage, transcribeAudio, onClose }) {
   const [messages, setMessages] = useState([
     { role: 'assistant', text: visionData.opening_line }
   ]);
   const [inputVal, setInputVal] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const endOfChatRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   useEffect(() => {
     endOfChatRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleSend = async (e) => {
-    e.preventDefault();
-    if (!inputVal.trim() || isTyping) return;
+  const handleSend = async (messageText) => {
+    const text = messageText || inputVal;
+    if (!text.trim() || isTyping) return;
 
-    const userMessage = inputVal;
-    setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
+    setMessages(prev => [...prev, { role: 'user', text }]);
     setInputVal('');
     setIsTyping(true);
 
-    const reply = await sendMessage(userMessage);
+    const reply = await sendMessage(text);
 
     if (reply) {
       setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
+      // Speak the reply using Web Speech API
+      speakReply(reply);
     } else {
       setMessages(prev => [...prev, { role: 'assistant', text: '[CONNECTION LOST... UNABLE TO RESPOND]' }]);
     }
     setIsTyping(false);
+  };
+
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    handleSend();
+  };
+
+  // Text-to-speech using Web Speech API
+  const speakReply = (text) => {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel(); // cancel any ongoing speech
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.95;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Start recording
+  const startRecording = async () => {
+    if (isTyping || isTranscribing) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setIsTranscribing(true);
+        const transcript = await transcribeAudio(audioBlob);
+        setIsTranscribing(false);
+        if (transcript && transcript.trim()) {
+          handleSend(transcript.trim());
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Microphone access error:', err);
+    }
+  };
+
+  // Stop recording
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
   };
 
   return (
@@ -73,11 +132,15 @@ export default function ChatPanel({ visionData, sendMessage, onClose }) {
             </div>
           </div>
         ))}
-        {isTyping && (
+        {(isTyping || isTranscribing) && (
            <div className="mr-auto text-left max-w-[85%]">
-             <div className="text-[10px] mb-1 opacity-50 uppercase text-neon-cyan">{visionData.object_type}</div>
+             <div className="text-[10px] mb-1 opacity-50 uppercase text-neon-cyan">
+               {isTranscribing ? 'SYSTEM' : visionData.object_type}
+             </div>
              <div className="p-3 rounded bg-black/50 border border-neon-cyan/30 text-gray-200">
-               <span className="animate-pulse">_PROCESSING...</span>
+               <span className="animate-pulse">
+                 {isTranscribing ? '_TRANSCRIBING...' : '_PROCESSING...'}
+               </span>
              </div>
            </div>
         )}
@@ -85,23 +148,45 @@ export default function ChatPanel({ visionData, sendMessage, onClose }) {
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSend} className="p-4 bg-black/60 border-t border-neon-cyan/20">
+      <form onSubmit={handleFormSubmit} className="p-4 bg-black/60 border-t border-neon-cyan/20">
         <div className="flex gap-2">
+          {/* Mic button — hold to record */}
+          <button
+            type="button"
+            onMouseDown={startRecording}
+            onMouseUp={stopRecording}
+            onTouchStart={startRecording}
+            onTouchEnd={stopRecording}
+            disabled={isTyping || isTranscribing}
+            className={`px-3 py-2 font-mono text-sm border rounded transition-all select-none ${
+              isRecording
+                ? 'bg-neon-magenta/40 border-neon-magenta text-neon-magenta shadow-[0_0_10px_rgba(255,45,120,0.5)] animate-pulse'
+                : 'bg-transparent border-neon-cyan/30 text-neon-cyan/60 hover:border-neon-magenta/50 hover:text-neon-magenta/80'
+            } disabled:opacity-30 disabled:cursor-not-allowed`}
+            title="Hold to speak"
+          >
+            {isRecording ? '●' : '🎙'}
+          </button>
+
            <input 
              type="text" 
              value={inputVal}
              onChange={e => setInputVal(e.target.value)}
              className="flex-1 bg-transparent border border-neon-cyan/50 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-neon-cyan shadow-[inset_0_0_5px_rgba(0,245,255,0.1)] transition-colors placeholder-gray-600"
-             placeholder="Transmit message..."
+             placeholder={isRecording ? 'Recording...' : isTranscribing ? 'Transcribing...' : 'Transmit message...'}
+             disabled={isRecording || isTranscribing}
              maxLength={250}
            />
            <button 
              type="submit" 
-             disabled={isTyping || !inputVal.trim()}
+             disabled={isTyping || !inputVal.trim() || isRecording || isTranscribing}
              className="px-4 py-2 bg-neon-cyan/20 hover:bg-neon-cyan/40 text-neon-cyan font-mono text-sm border border-neon-cyan/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase"
            >
              [Send]
            </button>
+        </div>
+        <div className="mt-2 text-[10px] font-mono text-gray-600 text-center">
+          {isRecording ? '● RECORDING — release to send' : 'Hold 🎙 to speak · Type to transmit'}
         </div>
       </form>
     </div>
