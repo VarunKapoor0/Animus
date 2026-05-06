@@ -13,29 +13,20 @@ function App() {
   const [chatActive, setChatActive] = useState(false);
   const [tapPos, setTapPos] = useState(null);
   
-  const { isProcessing, error, identifyObject, startConversation, sendMessage } = useGemini();
+  const { isProcessing, error, identifyObject, startConversation, sendMessage, transcribeAudio } = useGemini();
   
-  // We assume standard browser check for MVP simplicity.
   const isWebXRSupported = 'xr' in navigator;
   
   const handleScan = async (imageSrc) => {
     setChatActive(false);
-    // If we have no image source or captureFrame fails
     if (!imageSrc) return;
-    
-    // Calls the hook to do generative AI
     const result = await identifyObject(imageSrc);
-    if (result) {
-      setVisionData(result);
-    }
+    if (result) setVisionData(result);
   };
 
   const handleScreenTap = (e) => {
-    // Only allow tapping if we're not actively processing, viewing data, or chatting
     if (isProcessing || visionData || chatActive) return;
-    
     setTapPos({ x: e.clientX, y: e.clientY });
-    
     if (window.captureFrame) {
       const imgData = window.captureFrame();
       handleScan(imgData);
@@ -56,10 +47,8 @@ function App() {
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-sans scanlines">
-      {/* Background Camera Layer */}
       <Camera />
 
-      {/* Invisible clickable layer to catch taps across the whole screen */}
       {!isProcessing && !visionData && !chatActive && (
         <div 
           className="absolute inset-0 z-10 pointer-events-auto cursor-crosshair" 
@@ -67,10 +56,8 @@ function App() {
         />
       )}
 
-      {/* AR Overlay wraps the main UI - Handles Three.js Canvas injection */}
       <AROverlay isSupported={isWebXRSupported}>
         
-        {/* Neon Bounding Box */}
         {(isProcessing || visionData || chatActive) && (
           <BoundingBox 
             x={tapPos?.x ?? null} 
@@ -79,9 +66,7 @@ function App() {
           />
         )}
 
-        {/* Main UI Overlay */}
         <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-6">
-          {/* Top Header */}
           <header className="flex justify-between items-start">
             <div>
               <GlitchText text="ANIMUS_OS_v1.0" className="text-neon-cyan font-mono text-xs tracking-widest font-bold opacity-80" />
@@ -95,7 +80,6 @@ function App() {
             </div>
           </header>
 
-          {/* Dynamic Center/Overlay content can go here */}
           <div className="flex-1 flex items-center justify-center relative pointer-events-none">
             {isProcessing && (
               <div className="panel-bg neon-border-cyan p-4 flex flex-col items-center animate-[flicker_0.3s_ease-in]">
@@ -118,14 +102,13 @@ function App() {
               <ChatPanel 
                 visionData={visionData}
                 sendMessage={sendMessage}
+                transcribeAudio={transcribeAudio}
                 onClose={handleCloseChat}
               />
             )}
           </div>
 
-          {/* Bottom Controls */}
           <div className="pb-8 flex justify-center pointer-events-auto">
-             {/* Only show scan button if not actively conversing or scanning */}
              {!isProcessing && !visionData && !chatActive && (
                <ScanButton 
                  onScan={(img) => { setTapPos(null); handleScan(img); }} 
