@@ -1,5 +1,5 @@
 // Vercel serverless function — converts text to speech using Groq TTS.
-// Returns audio/mpeg binary stream.
+// Returns audio/wav binary stream.
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -18,6 +18,7 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
+    console.error('GROQ_API_KEY is not set');
     return res.status(500).json({ error: 'GROQ_API_KEY is not configured.' });
   }
 
@@ -36,20 +37,19 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: 'playai-tts',
         input: text,
-        voice: 'Celeste-PlayAI', // natural, expressive voice
-        response_format: 'mp3',
+        voice: 'Fritz-PlayAI',
+        response_format: 'wav',
       }),
     });
 
     if (!response.ok) {
       const err = await response.text();
       console.error('Groq TTS error:', err);
-      return res.status(500).json({ error: 'TTS failed.' });
+      return res.status(500).json({ error: 'TTS failed.', detail: err });
     }
 
-    // Stream audio back to client
     const audioBuffer = await response.arrayBuffer();
-    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Type', 'audio/wav');
     res.setHeader('Content-Length', audioBuffer.byteLength);
     res.status(200).send(Buffer.from(audioBuffer));
 
