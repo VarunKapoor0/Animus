@@ -1,6 +1,31 @@
 import { useState, useRef, useEffect } from 'react';
 import GlitchText from './GlitchText';
 
+// Map Whisper language names to BCP-47 tags for Web Speech API
+const LANG_TO_BCP47 = {
+  'hindi': 'hi-IN',
+  'spanish': 'es-ES',
+  'french': 'fr-FR',
+  'german': 'de-DE',
+  'italian': 'it-IT',
+  'portuguese': 'pt-BR',
+  'japanese': 'ja-JP',
+  'korean': 'ko-KR',
+  'chinese': 'zh-CN',
+  'arabic': 'ar-SA',
+  'russian': 'ru-RU',
+  'dutch': 'nl-NL',
+  'polish': 'pl-PL',
+  'turkish': 'tr-TR',
+  'swedish': 'sv-SE',
+};
+
+function toBCP47(language) {
+  if (!language) return null;
+  const l = language.toLowerCase();
+  return LANG_TO_BCP47[l] || l; // fall back to the raw value if not in map
+}
+
 export default function ChatPanel({ visionData, sendMessage, transcribeAudio, onClose }) {
   const [messages, setMessages] = useState([
     { role: 'assistant', text: visionData.opening_line }
@@ -68,7 +93,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
 
   // TTS routing:
   // English — try Groq Orpheus, fall back to Web Speech
-  // Non-English — go straight to Web Speech (Orpheus is English only)
+  // Non-English — Web Speech with correct BCP-47 lang tag
   const speakReply = async (text, language = 'english') => {
     stopAudio();
 
@@ -96,13 +121,13 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
       }
     }
 
-    // Web Speech fallback — used for non-English and when Groq fails
+    // Web Speech — with proper BCP-47 language tag
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.95;
+      utterance.rate = 0.9;
       utterance.pitch = 1.0;
-      // Set language hint so browser picks the right voice
-      if (!isEnglish) utterance.lang = language;
+      const langTag = isEnglish ? 'en-US' : toBCP47(language);
+      if (langTag) utterance.lang = langTag;
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -214,7 +239,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
             } disabled:opacity-30 disabled:cursor-not-allowed`}
             title="Hold to speak"
           >
-            {isRecording ? '\u25cf' : '\ud83c\udf99'}
+            {isRecording ? '●' : '🎙'}
           </button>
 
            <input 
@@ -222,7 +247,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
              value={inputVal}
              onChange={e => setInputVal(e.target.value)}
              className="flex-1 bg-transparent border border-neon-cyan/50 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-neon-cyan shadow-[inset_0_0_5px_rgba(0,245,255,0.1)] transition-colors placeholder-gray-600"
-             placeholder={isRecording ? 'Recording...' : isTranscribing ? 'Transcribing...' : 'Type or hold \ud83c\udf99 to speak...'}
+             placeholder={isRecording ? 'Recording...' : isTranscribing ? 'Transcribing...' : 'Type or hold 🎙 to speak...'}
              disabled={isRecording || isTranscribing}
              maxLength={250}
            />
@@ -235,7 +260,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
            </button>
         </div>
         <div className="mt-2 text-[10px] font-mono text-gray-600 text-center">
-          {isRecording ? '\u25cf RECORDING \u2014 release to send' : 'Hold \ud83c\udf99 to speak \u00b7 Type to transmit'}
+          {isRecording ? '● RECORDING — release to send' : 'Hold 🎙 to speak · Type to transmit'}
         </div>
       </form>
     </div>
