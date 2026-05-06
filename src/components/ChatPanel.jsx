@@ -18,7 +18,11 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
     endOfChatRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  // Auto-play opening line when chat panel mounts
   useEffect(() => {
+    if (visionData.opening_line) {
+      speakReply(visionData.opening_line);
+    }
     return () => stopAudio();
   }, []);
 
@@ -207,7 +211,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
              value={inputVal}
              onChange={e => setInputVal(e.target.value)}
              className="flex-1 bg-transparent border border-neon-cyan/50 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-neon-cyan shadow-[inset_0_0_5px_rgba(0,245,255,0.1)] transition-colors placeholder-gray-600"
-             placeholder={isRecording ? 'Recording...' : isTranscribing ? 'Transcribing...' : 'Transmit message...'}
+             placeholder={isRecording ? 'Recording...' : isTranscribing ? 'Transcribing...' : 'Type or hold 🎙 to speak...'}
              disabled={isRecording || isTranscribing}
              maxLength={250}
            />
