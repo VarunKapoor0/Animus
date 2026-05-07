@@ -5,26 +5,30 @@ export default function TapRipple({ x, y, trigger }) {
   const rippleRef = useRef(null);
 
   useEffect(() => {
-    if (!trigger || x === null || y === null || !rippleRef.current) return;
-    const el = rippleRef.current;
-    el.style.transition = 'none';
-    el.style.opacity = '0.8';
-    el.style.transform = 'translate(-50%, -50%) scale(0)';
-    void el.offsetWidth;
-    el.style.transition = 'transform 0.6s ease-out, opacity 0.6s ease-out';
-    el.style.transform = 'translate(-50%, -50%) scale(1)';
-    el.style.opacity = '0';
-  }, [trigger]);
+    if (!trigger || x === null || y === null) return;
+    // Small timeout to ensure ref is attached after position change
+    const t = setTimeout(() => {
+      const el = rippleRef.current;
+      if (!el) return;
+      el.style.transition = 'none';
+      el.style.opacity = '0.8';
+      el.style.transform = 'translate(-50%, -50%) scale(0)';
+      void el.offsetWidth;
+      el.style.transition = 'transform 0.6s ease-out, opacity 0.6s ease-out';
+      el.style.transform = 'translate(-50%, -50%) scale(1)';
+      el.style.opacity = '0';
+    }, 10);
+    return () => clearTimeout(t);
+  }, [trigger, x, y]);
 
-  if (!trigger || x === null || y === null) return null;
-
+  // Always render — keep invisible until triggered
   return (
     <div
       ref={rippleRef}
       className="absolute pointer-events-none z-30"
       style={{
-        left: x,
-        top: y,
+        left: x ?? -9999,
+        top: y ?? -9999,
         width: 120,
         height: 120,
         borderRadius: '50%',
