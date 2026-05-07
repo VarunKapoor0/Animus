@@ -6,22 +6,36 @@ export default function SpatialMarkers({ markers, onTap }) {
     <>
       {markers.map((marker, i) => (
         <button
-          key={i}
+          key={`${marker.object_type}-${i}`}
           onClick={() => onTap(marker)}
-          className="absolute pointer-events-auto z-30 group"
+          className="absolute group"
           style={{
             left: marker.x,
             top: marker.y,
             transform: 'translate(-50%, -50%)',
+            zIndex: 35,
+            pointerEvents: 'auto',
           }}
         >
-          <div className="relative flex items-center justify-center">
-            <div className="w-2 h-2 rounded-full bg-neon-cyan shadow-[0_0_8px_#00f5ff] group-hover:shadow-[0_0_16px_#00f5ff] transition-shadow" />
+          <div className="relative flex items-center">
+            {/* Pulsing dot */}
+            <div className="relative w-3 h-3 flex-none">
+              <div className="absolute inset-0 rounded-full bg-neon-cyan/30 animate-ping" />
+              <div className="relative w-3 h-3 rounded-full bg-neon-cyan shadow-[0_0_10px_#00f5ff] group-hover:shadow-[0_0_20px_#00f5ff] transition-shadow" />
+            </div>
+            {/* Label */}
             <div
-              className="absolute left-4 top-1/2 -translate-y-1/2 whitespace-nowrap font-mono text-[9px] uppercase tracking-widest text-neon-cyan/60 group-hover:text-neon-cyan transition-colors"
-              style={{ textShadow: '0 0 8px rgba(0,245,255,0.4)' }}
+              className="ml-2 whitespace-nowrap font-mono text-[9px] uppercase tracking-widest px-2 py-0.5 rounded"
+              style={{
+                color: 'rgba(0,245,255,0.7)',
+                background: 'rgba(0,0,0,0.6)',
+                border: '1px solid rgba(0,245,255,0.2)',
+                textShadow: '0 0 6px rgba(0,245,255,0.5)',
+              }}
             >
-              {marker.object_type.length > 18 ? marker.object_type.substring(0, 18) + '...' : marker.object_type}
+              {marker.object_type.length > 16
+                ? marker.object_type.substring(0, 16) + '...'
+                : marker.object_type}
             </div>
           </div>
         </button>
