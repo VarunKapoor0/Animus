@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Camera from './components/Camera';
 import ScanButton from './components/ScanButton';
 import GlitchText from './components/GlitchText';
@@ -19,14 +19,19 @@ function App() {
   
   const isWebXRSupported = 'xr' in navigator;
 
-  // Push history entry when entering app, pop back to landing on back button
+  // On first load, replace current history entry with landing state
   useEffect(() => {
-    const handlePopState = () => {
-      setLanded(false);
-      setVisionData(null);
-      setChatActive(false);
-      setTapPos(null);
+    window.history.replaceState({ page: 'landing' }, '');
+
+    const handlePopState = (e) => {
+      if (!e.state || e.state.page === 'landing') {
+        setLanded(false);
+        setVisionData(null);
+        setChatActive(false);
+        setTapPos(null);
+      }
     };
+
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
