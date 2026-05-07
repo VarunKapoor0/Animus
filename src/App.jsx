@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Camera from './components/Camera';
 import ScanButton from './components/ScanButton';
 import GlitchText from './components/GlitchText';
@@ -10,7 +10,7 @@ import LandingPage from './components/LandingPage';
 import useGemini from './hooks/useGemini';
 
 function App() {
-  const [landed, setLanded] = useState(false); // false = show landing, true = show app
+  const [landed, setLanded] = useState(false);
   const [visionData, setVisionData] = useState(null);
   const [chatActive, setChatActive] = useState(false);
   const [tapPos, setTapPos] = useState(null);
@@ -19,9 +19,25 @@ function App() {
   
   const isWebXRSupported = 'xr' in navigator;
 
-  // Show landing page until user clicks INITIATE
+  // Push history entry when entering app, pop back to landing on back button
+  useEffect(() => {
+    const handlePopState = () => {
+      setLanded(false);
+      setVisionData(null);
+      setChatActive(false);
+      setTapPos(null);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleEnter = () => {
+    window.history.pushState({ page: 'app' }, '');
+    setLanded(true);
+  };
+
   if (!landed) {
-    return <LandingPage onEnter={() => setLanded(true)} />;
+    return <LandingPage onEnter={handleEnter} />;
   }
   
   const handleScan = async (imageSrc) => {
