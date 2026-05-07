@@ -13,10 +13,10 @@ import SpatialMarkers from './components/SpatialMarkers';
 import LandingPage from './components/LandingPage';
 import ScanHistory from './components/ScanHistory';
 import useGemini from './hooks/useGemini';
+import useWebXR from './hooks/useWebXR';
 
 const MAX_HISTORY = 5;
 const MAX_MARKERS = 8;
-
 const centerPos = () => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
 
 function App() {
@@ -26,6 +26,7 @@ function App() {
   const [debateActive, setDebateActive] = useState(false);
   const [debatePartner, setDebatePartner] = useState(null);
   const [tapPos, setTapPos] = useState(null);
+  const [tapWorldPos, setTapWorldPos] = useState(null); // THREE.Vector3 in AR mode
   const [rippleTrigger, setRippleTrigger] = useState(0);
   const [ripplePos, setRipplePos] = useState({ x: null, y: null });
   const [scanHistory, setScanHistory] = useState([]);
@@ -34,7 +35,16 @@ function App() {
   const [showDebatePrompt, setShowDebatePrompt] = useState(false);
 
   const { isProcessing, error, identifyObject, startConversation, sendMessage, transcribeAudio } = useGemini();
-  const isWebXRSupported = 'xr' in navigator;
+  const {
+    containerRef,
+    arSupported,
+    isARActive,
+    markerScreenPositions,
+    startAR,
+    captureHitPosition,
+    addARMarker,
+    removeARMarker,
+  } = useWebXR();
 
   useEffect(() => {
     window.history.replaceState({ page: 'landing' }, '');
@@ -46,6 +56,7 @@ function App() {
         setDebateActive(false);
         setDebatePartner(null);
         setTapPos(null);
+        setTapWorldPos(null);
         setResumedMessages(null);
         setShowDebatePrompt(false);
       }
@@ -68,6 +79,14 @@ function App() {
     setResumedMessages(null);
     setShowDebatePrompt(false);
     if (!imageSrc) return;
+
+    // Start AR session on first scan if supported (Android Chrome)
+    if (arSupported && !isARActive) startAR();
+
+    // Capture 3D hit position if AR is active
+    const worldPos = isARActive ? captureHitPosition() : null;
+    setTapWorldPos(worldPos);
+
     const result = await identifyObject(imageSrc);
     if (result) {
       setVisionData(result);
@@ -81,13 +100,9 @@ function App() {
     setTapPos(pos);
     setRipplePos(pos);
     setRippleTrigger(k => k + 1);
-    if (window.captureFrame) {
-      const imgData = window.captureFrame();
-      handleScan(imgData);
-    }
+    if (window.captureFrame) handleScan(window.captureFrame());
   };
 
-  // Scan button — fires ripple at center since no tap position
   const handleScanButton = (img) => {
     const pos = centerPos();
     setTapPos(pos);
@@ -100,10 +115,7 @@ function App() {
     setShowDebatePrompt(false);
     setChatActive(true);
     setResumedMessages(null);
-    await startConversation(
-      visionData.object_type, visionData.personality_summary,
-      visionData.voice, visionData.vocal_direction
-    );
+    await startConversation(visionData.object_type, visionData.personality_summary, visionData.voice, visionData.vocal_direction);
   };
 
   const handleStartDebate = (partner) => {
@@ -116,10 +128,7 @@ function App() {
     if (!visionData) return;
     setChatActive(true);
     setResumedMessages(null);
-    await startConversation(
-      visionData.object_type, visionData.personality_summary,
-      visionData.voice, visionData.vocal_direction
-    );
+    await startConversation(visionData.object_type, visionData.personality_summary, visionData.voice, visionData.vocal_direction);
   };
 
   const handleCloseChat = (savedMessages) => {
@@ -131,36 +140,43 @@ function App() {
         voice: visionData.voice,
         vocal_direction: visionData.vocal_direction,
         messages: savedMessages || [],
+        worldPos: tapWorldPos || null, // store 3D position if available
       };
       setScanHistory(prev => {
         const filtered = prev.filter(h => h.object_type !== entry.object_type);
         return [entry, ...filtered].slice(0, MAX_HISTORY);
       });
-      // Always save marker — use tapPos if available, else center
       const markerPos = tapPos || centerPos();
       setMarkers(prev => {
         const filtered = prev.filter(m => m.object_type !== entry.object_type);
         return [{ ...entry, x: markerPos.x, y: markerPos.y }, ...filtered].slice(0, MAX_MARKERS);
       });
+      // Place AR marker if in AR mode and we have a world position
+      if (isARActive && tapWorldPos) {
+        addARMarker(visionData.object_type, tapWorldPos);
+      }
     }
     setChatActive(false);
     setVisionData(null);
     setTapPos(null);
+    setTapWorldPos(null);
     setResumedMessages(null);
   };
 
   const handleCloseDebate = (debateEntry) => {
-    if (debateEntry) {
-      setScanHistory(prev => [debateEntry, ...prev].slice(0, MAX_HISTORY));
-    }
+    if (debateEntry) setScanHistory(prev => [debateEntry, ...prev].slice(0, MAX_HISTORY));
     setDebateActive(false);
     setDebatePartner(null);
     setVisionData(null);
     setTapPos(null);
+    setTapWorldPos(null);
   };
 
   const handleMarkerTap = async (marker) => {
     if (chatActive || debateActive || isProcessing) return;
+    if (marker.worldPos && isARActive) {
+      setTapWorldPos(marker.worldPos);
+    }
     setTapPos({ x: marker.x, y: marker.y });
     setVisionData({
       object_type: marker.object_type,
@@ -171,10 +187,7 @@ function App() {
     });
     setResumedMessages(marker.messages);
     setChatActive(true);
-    await startConversation(
-      marker.object_type, marker.personality_summary,
-      marker.voice, marker.vocal_direction
-    );
+    await startConversation(marker.object_type, marker.personality_summary, marker.voice, marker.vocal_direction);
   };
 
   const handleResume = async (historyItem) => {
@@ -189,25 +202,30 @@ function App() {
     setResumedMessages(historyItem.messages);
     setChatActive(true);
     setTapPos(null);
-    await startConversation(
-      historyItem.object_type, historyItem.personality_summary,
-      historyItem.voice, historyItem.vocal_direction
-    );
+    setTapWorldPos(null);
+    await startConversation(historyItem.object_type, historyItem.personality_summary, historyItem.voice, historyItem.vocal_direction);
   };
 
   const isIdle = !isProcessing && !visionData && !chatActive && !debateActive;
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-sans scanlines">
-      <Camera />
+      {/* Camera only shown in fallback mode — AR mode uses WebXR passthrough */}
+      {!isARActive && <Camera />}
 
       {isIdle && (
         <div className="absolute inset-0 z-10 pointer-events-auto cursor-crosshair" onClick={handleScreenTap} />
       )}
 
-      <AROverlay isSupported={isWebXRSupported}>
+      <AROverlay containerRef={containerRef}>
         <TapRipple x={ripplePos.x} y={ripplePos.y} trigger={rippleTrigger} />
-        <SpatialMarkers markers={isIdle ? markers : []} onTap={handleMarkerTap} />
+
+        <SpatialMarkers
+          markers={isIdle ? markers : []}
+          onTap={handleMarkerTap}
+          arMode={isARActive}
+          arScreenPositions={markerScreenPositions}
+        />
 
         {(isProcessing || visionData || chatActive || debateActive) && (
           <BoundingBox
@@ -223,7 +241,7 @@ function App() {
             <div>
               <GlitchText text="ANIMUS_OS_v1.0" className="text-neon-cyan font-mono text-xs tracking-widest font-bold opacity-80" />
               <div className={`text-[10px] uppercase mt-1 animate-flicker font-mono ${error ? 'text-neon-magenta' : 'text-neon-blue'}`}>
-                Status: {error ? 'ERROR' : isProcessing ? 'PROCESSING' : chatActive ? 'LINK ESTABLISHED' : debateActive ? 'DUAL LINK' : 'ONLINE'}
+                Status: {error ? 'ERROR' : isProcessing ? 'PROCESSING' : chatActive ? 'LINK ESTABLISHED' : debateActive ? 'DUAL LINK' : isARActive ? 'AR · ONLINE' : 'ONLINE'}
               </div>
               {error && <div className="text-xs text-neon-magenta mt-1 max-w-[200px]">{error}</div>}
             </div>
@@ -231,6 +249,7 @@ function App() {
               <div className={`w-2 h-2 ${
                 error ? 'bg-neon-magenta shadow-[0_0_8px_#ff00c8]'
                 : debateActive ? 'bg-neon-magenta shadow-[0_0_8px_#ff00c8]'
+                : isARActive ? 'bg-neon-cyan shadow-[0_0_12px_#00f5ff]'
                 : 'bg-neon-cyan shadow-[0_0_8px_#00f5ff]'
               } rounded-full ${(chatActive || debateActive) ? 'animate-none' : 'animate-pulse'}`}></div>
             </div>
@@ -287,10 +306,7 @@ function App() {
             {isIdle && (
               <>
                 <ScanHistory history={scanHistory} onResume={handleResume} />
-                <ScanButton
-                  onScan={handleScanButton}
-                  isScanning={isProcessing}
-                />
+                <ScanButton onScan={handleScanButton} isScanning={isProcessing} />
               </>
             )}
           </div>
