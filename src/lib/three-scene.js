@@ -13,8 +13,19 @@ export class ARSceneManager {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setClearColor(0x000000, 0); // fully transparent background
     this.renderer.xr.enabled = true;
-    this.container.appendChild(this.renderer.domElement);
+
+    // Canvas must be absolutely positioned and fill the screen
+    const canvas = this.renderer.domElement;
+    canvas.style.position = 'fixed';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.zIndex = '5'; // above camera feed (z-0), below React UI (z-20)
+    canvas.style.pointerEvents = 'none';
+    this.container.appendChild(canvas);
 
     const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
     light.position.set(0.5, 1, 0.25);
@@ -24,10 +35,10 @@ export class ARSceneManager {
     this.controller.addEventListener('select', this.onSelect.bind(this));
     this.scene.add(this.controller);
 
-    // Neon cyan reticle ring on detected surface
+    // Neon cyan reticle ring
     this.reticle = new THREE.Mesh(
       new THREE.RingGeometry(0.1, 0.14, 32).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0x00f5ff, transparent: true, opacity: 0.85 })
+      new THREE.MeshBasicMaterial({ color: 0x00f5ff, transparent: true, opacity: 0.9 })
     );
     this.reticle.matrixAutoUpdate = false;
     this.reticle.visible = false;
@@ -39,7 +50,6 @@ export class ARSceneManager {
     window.addEventListener('resize', this.onWindowResize.bind(this));
   }
 
-  // Start AR session programmatically — no button needed
   async startSession() {
     try {
       const session = await navigator.xr.requestSession('immersive-ar', {
@@ -58,8 +68,11 @@ export class ARSceneManager {
         this.session = null;
         this.renderer.setAnimationLoop(null);
       });
+
+      return true;
     } catch (err) {
       console.error('Failed to start AR session:', err);
+      return false;
     }
   }
 
@@ -68,7 +81,6 @@ export class ARSceneManager {
     this.renderer.setAnimationLoop(null);
   }
 
-  // Snapshot the reticle's current world position when user taps to scan
   captureHitPosition() {
     if (this.reticle.visible) {
       const pos = new THREE.Vector3();
@@ -80,7 +92,7 @@ export class ARSceneManager {
 
   addMarker(objectType, worldPos) {
     const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.02, 16, 16),
+      new THREE.SphereGeometry(0.025, 16, 16),
       new THREE.MeshBasicMaterial({ color: 0x00f5ff })
     );
     mesh.position.copy(worldPos);

@@ -1,18 +1,11 @@
-// AROverlay: mounts the Three.js WebXR container.
-// When AR is active, Three.js canvas sits on top and renders passthrough + 3D elements.
-// React UI renders on top of everything via domOverlay.
+// AROverlay: mounts the Three.js WebXR canvas container.
+// The canvas itself handles its own z-index via inline style in three-scene.js.
+// React UI sits above everything via z-20 on the inner div.
 
-export default function AROverlay({ children, containerRef, isARActive }) {
+export default function AROverlay({ children, containerRef }) {
   return (
     <>
-      {/* Three.js canvas container:
-          - Inactive: z-0, hidden behind camera feed
-          - Active: z-10, on top of everything so WebXR passthrough is visible */}
-      <div
-        ref={containerRef}
-        className="absolute inset-0 pointer-events-none"
-        style={{ zIndex: isARActive ? 10 : 0 }}
-      />
+      <div ref={containerRef} className="absolute inset-0 z-0 pointer-events-none" />
       {children}
     </>
   );

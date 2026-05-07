@@ -22,7 +22,15 @@ export default function useWebXR() {
     const manager = new ARSceneManager(containerRef.current);
     managerRef.current = manager;
 
-    await manager.startSession();
+    const success = await manager.startSession();
+    if (!success) {
+      // Session failed — clean up
+      manager.dispose();
+      managerRef.current = null;
+      return;
+    }
+
+    // Only mark AR active after session is confirmed running
     setIsARActive(true);
 
     const interval = setInterval(() => {

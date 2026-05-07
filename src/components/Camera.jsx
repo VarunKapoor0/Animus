@@ -41,7 +41,7 @@ export default function Camera({ hidden }) {
         playsInline
         muted
         className="absolute inset-0 w-full h-full object-cover z-0 filter brightness-75 contrast-125 grayscale-[20%]"
-        style={{ display: hidden ? 'none' : 'block' }}
+        style={{ visibility: hidden ? 'hidden' : 'visible' }}
       />
       <canvas ref={canvasRef} className="hidden" />
     </>
