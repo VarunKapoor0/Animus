@@ -13,10 +13,12 @@ function toBCP47(language) {
   return LANG_TO_BCP47[language.toLowerCase()] || language;
 }
 
-export default function ChatPanel({ visionData, sendMessage, transcribeAudio, onClose }) {
-  const [messages, setMessages] = useState([
-    { role: 'assistant', text: visionData.opening_line }
-  ]);
+export default function ChatPanel({ visionData, sendMessage, transcribeAudio, initialMessages, onClose }) {
+  const defaultMessages = [{ role: 'assistant', text: visionData.opening_line }];
+
+  const [messages, setMessages] = useState(
+    initialMessages && initialMessages.length > 0 ? initialMessages : defaultMessages
+  );
   const [inputVal, setInputVal] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -25,6 +27,10 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const currentAudioRef = useRef(null);
+  const messagesRef = useRef(messages);
+
+  // Keep messagesRef in sync so we can read latest on close
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const voice = visionData.voice || 'diana';
   const vocalDirection = visionData.vocal_direction || null;
@@ -33,8 +39,12 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
     endOfChatRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  // Auto-play opening line only when starting fresh (not resuming)
   useEffect(() => {
-    if (visionData.opening_line) speakReply(visionData.opening_line, 'english');
+    const isResuming = initialMessages && initialMessages.length > 0;
+    if (!isResuming && visionData.opening_line) {
+      speakReply(visionData.opening_line, 'english');
+    }
     return () => stopAudio();
   }, []);
 
@@ -47,7 +57,11 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   };
 
-  const handleClose = () => { stopAudio(); onClose(); };
+  const handleClose = () => {
+    stopAudio();
+    // Pass current messages back to App for history saving
+    onClose(messagesRef.current);
+  };
 
   const handleSend = async (messageText) => {
     const text = messageText || inputVal;
@@ -181,7 +195,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
 
       {/* Input area */}
       <div className="p-4 bg-black/60 border-t border-neon-cyan/20 space-y-3">
-
         {/* HOLD TO SPEAK — full width, prominent */}
         <button
           type="button"
