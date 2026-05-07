@@ -1,28 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 
-// Map Whisper language names to BCP-47 tags for Web Speech API
 const LANG_TO_BCP47 = {
-  'hindi': 'hi-IN',
-  'spanish': 'es-ES',
-  'french': 'fr-FR',
-  'german': 'de-DE',
-  'italian': 'it-IT',
-  'portuguese': 'pt-BR',
-  'japanese': 'ja-JP',
-  'korean': 'ko-KR',
-  'chinese': 'zh-CN',
-  'arabic': 'ar-SA',
-  'russian': 'ru-RU',
-  'dutch': 'nl-NL',
-  'polish': 'pl-PL',
-  'turkish': 'tr-TR',
-  'swedish': 'sv-SE',
+  'hindi': 'hi-IN', 'spanish': 'es-ES', 'french': 'fr-FR',
+  'german': 'de-DE', 'italian': 'it-IT', 'portuguese': 'pt-BR',
+  'japanese': 'ja-JP', 'korean': 'ko-KR', 'chinese': 'zh-CN',
+  'arabic': 'ar-SA', 'russian': 'ru-RU', 'dutch': 'nl-NL',
+  'polish': 'pl-PL', 'turkish': 'tr-TR', 'swedish': 'sv-SE',
 };
 
 function toBCP47(language) {
   if (!language) return null;
-  const l = language.toLowerCase();
-  return LANG_TO_BCP47[l] || l;
+  return LANG_TO_BCP47[language.toLowerCase()] || language;
 }
 
 export default function ChatPanel({ visionData, sendMessage, transcribeAudio, onClose }) {
@@ -38,7 +26,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
   const audioChunksRef = useRef([]);
   const currentAudioRef = useRef(null);
 
-  // Pull voice and vocal_direction from visionData
   const voice = visionData.voice || 'diana';
   const vocalDirection = visionData.vocal_direction || null;
 
@@ -46,11 +33,8 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
     endOfChatRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // Auto-play opening line on mount
   useEffect(() => {
-    if (visionData.opening_line) {
-      speakReply(visionData.opening_line, 'english');
-    }
+    if (visionData.opening_line) speakReply(visionData.opening_line, 'english');
     return () => stopAudio();
   }, []);
 
@@ -63,21 +47,15 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   };
 
-  const handleClose = () => {
-    stopAudio();
-    onClose();
-  };
+  const handleClose = () => { stopAudio(); onClose(); };
 
   const handleSend = async (messageText) => {
     const text = messageText || inputVal;
     if (!text.trim() || isTyping) return;
-
     setMessages(prev => [...prev, { role: 'user', text }]);
     setInputVal('');
     setIsTyping(true);
-
     const result = await sendMessage(text);
-
     if (result) {
       const replyText = result.text || result;
       const replyLang = result.language || 'english';
@@ -89,16 +67,9 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
     setIsTyping(false);
   };
 
-  const handleFormSubmit = (e) => {
-    e.preventDefault();
-    handleSend();
-  };
-
-  // TTS — Orpheus for English with object's voice + direction, Web Speech for non-English
   const speakReply = async (text, language = 'english') => {
     stopAudio();
     const isEnglish = !language || language === 'english' || language === 'en';
-
     if (isEnglish) {
       try {
         const response = await fetch('/api/speak', {
@@ -106,7 +77,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, voice, vocal_direction: vocalDirection })
         });
-
         if (response.ok) {
           const audioBlob = await response.blob();
           const audioUrl = URL.createObjectURL(audioBlob);
@@ -120,8 +90,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
         console.warn('Groq TTS failed, falling back to Web Speech:', err);
       }
     }
-
-    // Web Speech fallback
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.9;
@@ -139,22 +107,17 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
       audioChunksRef.current = [];
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
-
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
-
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         setIsTranscribing(true);
         const transcript = await transcribeAudio(audioBlob);
         setIsTranscribing(false);
-        if (transcript && transcript.trim()) {
-          handleSend(transcript.trim());
-        }
+        if (transcript && transcript.trim()) handleSend(transcript.trim());
       };
-
       mediaRecorder.start();
       setIsRecording(true);
     } catch (err) {
@@ -171,97 +134,97 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, on
 
   return (
     <div className="absolute inset-0 m-4 sm:m-8 panel-bg border border-neon-cyan/50 flex flex-col pointer-events-auto shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden">
+      {/* Header */}
       <div className="bg-neon-cyan/10 border-b border-neon-cyan/30 px-4 py-3 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse"></div>
           <span className="font-mono text-sm tracking-wider uppercase text-neon-cyan font-bold">
-             LINK: {visionData.object_type}
+            LINK: {visionData.object_type}
           </span>
         </div>
-        <button 
-          onClick={handleClose}
-          className="text-gray-400 hover:text-neon-magenta transition-colors font-mono text-sm uppercase px-2 py-1"
-        >
+        <button onClick={handleClose} className="text-gray-400 hover:text-neon-magenta transition-colors font-mono text-sm uppercase px-2 py-1">
           [Terminate]
         </button>
       </div>
 
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-sm custom-scrollbar">
         {messages.map((msg, i) => (
-          <div 
-            key={i} 
-            className={`max-w-[85%] ${msg.role === 'user' ? 'ml-auto text-right' : 'mr-auto text-left'}`}
-          >
+          <div key={i} className={`max-w-[85%] ${msg.role === 'user' ? 'ml-auto text-right' : 'mr-auto text-left'}`}>
             <div className={`text-[10px] mb-1 opacity-50 uppercase ${msg.role === 'user' ? 'text-neon-blue' : 'text-neon-cyan'}`}>
               {msg.role === 'user' ? 'USER' : visionData.object_type}
             </div>
             <div className={`p-3 rounded inline-block ${
-              msg.role === 'user' 
-                ? 'bg-neon-blue/20 border border-neon-blue/30 text-white' 
+              msg.role === 'user'
+                ? 'bg-neon-blue/20 border border-neon-blue/30 text-white'
                 : 'bg-black/50 border border-neon-cyan/30 text-gray-200 shadow-[inset_0_0_10px_rgba(0,245,255,0.05)]'
             }`}>
-               {msg.role === 'assistant' ? (
-                 <span className="chromatic font-serif italic text-base leading-relaxed whitespace-pre-wrap">{msg.text}</span>
-               ) : (
-                 <span className="whitespace-pre-wrap">{msg.text}</span>
-               )}
+              {msg.role === 'assistant'
+                ? <span className="chromatic font-serif italic text-base leading-relaxed whitespace-pre-wrap">{msg.text}</span>
+                : <span className="whitespace-pre-wrap">{msg.text}</span>
+              }
             </div>
           </div>
         ))}
         {(isTyping || isTranscribing) && (
-           <div className="mr-auto text-left max-w-[85%]">
-             <div className="text-[10px] mb-1 opacity-50 uppercase text-neon-cyan">
-               {isTranscribing ? 'SYSTEM' : visionData.object_type}
-             </div>
-             <div className="p-3 rounded bg-black/50 border border-neon-cyan/30 text-gray-200">
-               <span className="animate-pulse">
-                 {isTranscribing ? '_TRANSCRIBING...' : '_PROCESSING...'}
-               </span>
-             </div>
-           </div>
+          <div className="mr-auto text-left max-w-[85%]">
+            <div className="text-[10px] mb-1 opacity-50 uppercase text-neon-cyan">
+              {isTranscribing ? 'SYSTEM' : visionData.object_type}
+            </div>
+            <div className="p-3 rounded bg-black/50 border border-neon-cyan/30 text-gray-200">
+              <span className="animate-pulse">{isTranscribing ? '_TRANSCRIBING...' : '_PROCESSING...'}</span>
+            </div>
+          </div>
         )}
         <div ref={endOfChatRef} />
       </div>
 
-      <form onSubmit={handleFormSubmit} className="p-4 bg-black/60 border-t border-neon-cyan/20">
-        <div className="flex gap-2">
+      {/* Input area */}
+      <div className="p-4 bg-black/60 border-t border-neon-cyan/20 space-y-3">
+
+        {/* HOLD TO SPEAK — full width, prominent */}
+        <button
+          type="button"
+          onMouseDown={startRecording}
+          onMouseUp={stopRecording}
+          onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
+          onTouchEnd={stopRecording}
+          disabled={isTyping || isTranscribing}
+          className={`w-full py-3 font-mono text-sm tracking-widest uppercase transition-all duration-150 select-none rounded ${
+            isRecording
+              ? 'bg-neon-magenta/20 border border-neon-magenta text-neon-magenta shadow-[0_0_20px_rgba(255,0,200,0.3)] animate-pulse'
+              : isTranscribing
+              ? 'bg-neon-cyan/10 border border-neon-cyan/40 text-neon-cyan/60 cursor-wait'
+              : 'bg-transparent border border-neon-magenta/40 text-neon-magenta/70 hover:bg-neon-magenta/10 hover:border-neon-magenta hover:text-neon-magenta hover:shadow-[0_0_15px_rgba(255,0,200,0.2)]'
+          } disabled:opacity-40 disabled:cursor-not-allowed`}
+        >
+          {isRecording
+            ? '● RECORDING — release to send'
+            : isTranscribing
+            ? '⟳ TRANSCRIBING...'
+            : '🎙 HOLD TO SPEAK'}
+        </button>
+
+        {/* Text input row */}
+        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2">
+          <input
+            type="text"
+            value={inputVal}
+            onChange={e => setInputVal(e.target.value)}
+            className="flex-1 bg-transparent border border-neon-cyan/50 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-neon-cyan shadow-[inset_0_0_5px_rgba(0,245,255,0.1)] transition-colors placeholder-gray-600"
+            placeholder="Or type a message..."
+            disabled={isRecording || isTranscribing}
+            maxLength={250}
+          />
           <button
-            type="button"
-            onMouseDown={startRecording}
-            onMouseUp={stopRecording}
-            onTouchStart={startRecording}
-            onTouchEnd={stopRecording}
-            disabled={isTyping || isTranscribing}
-            className={`px-3 py-2 font-mono text-sm border rounded transition-all select-none ${
-              isRecording
-                ? 'bg-neon-magenta/40 border-neon-magenta text-neon-magenta shadow-[0_0_10px_rgba(255,45,120,0.5)] animate-pulse'
-                : 'bg-transparent border-neon-cyan/30 text-neon-cyan/60 hover:border-neon-magenta/50 hover:text-neon-magenta/80'
-            } disabled:opacity-30 disabled:cursor-not-allowed`}
-            title="Hold to speak"
+            type="submit"
+            disabled={isTyping || !inputVal.trim() || isRecording || isTranscribing}
+            className="px-4 py-2 bg-neon-cyan/20 hover:bg-neon-cyan/40 text-neon-cyan font-mono text-sm border border-neon-cyan/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase"
           >
-            {isRecording ? '\u25cf' : '\ud83c\udf99'}
+            [Send]
           </button>
-           <input 
-             type="text" 
-             value={inputVal}
-             onChange={e => setInputVal(e.target.value)}
-             className="flex-1 bg-transparent border border-neon-cyan/50 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-neon-cyan shadow-[inset_0_0_5px_rgba(0,245,255,0.1)] transition-colors placeholder-gray-600"
-             placeholder={isRecording ? 'Recording...' : isTranscribing ? 'Transcribing...' : 'Type or hold \ud83c\udf99 to speak...'}
-             disabled={isRecording || isTranscribing}
-             maxLength={250}
-           />
-           <button 
-             type="submit" 
-             disabled={isTyping || !inputVal.trim() || isRecording || isTranscribing}
-             className="px-4 py-2 bg-neon-cyan/20 hover:bg-neon-cyan/40 text-neon-cyan font-mono text-sm border border-neon-cyan/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase"
-           >
-             [Send]
-           </button>
-        </div>
-        <div className="mt-2 text-[10px] font-mono text-gray-600 text-center">
-          {isRecording ? '\u25cf RECORDING \u2014 release to send' : 'Hold \ud83c\udf99 to speak \u00b7 Type to transmit'}
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
