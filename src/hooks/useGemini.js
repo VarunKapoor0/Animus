@@ -33,6 +33,7 @@ export default function useGemini() {
       }
 
       const parsed = await response.json();
+      // parsed now includes voice and vocal_direction from Gemini
       setIsProcessing(false);
       return parsed;
     } catch (err) {
@@ -43,8 +44,8 @@ export default function useGemini() {
     }
   }, []);
 
-  const startConversation = useCallback(async (objectType, personalitySummary) => {
-    setChatState({ objectType, personalitySummary, history: [], language: 'english' });
+  const startConversation = useCallback(async (objectType, personalitySummary, voice, vocalDirection) => {
+    setChatState({ objectType, personalitySummary, history: [], language: 'english', voice, vocalDirection });
     return true;
   }, []);
 
@@ -108,7 +109,6 @@ export default function useGemini() {
         ]
       }));
 
-      // Return both text and language so ChatPanel can route TTS correctly
       return { text: data.text, language: data.language || chatState.language };
     } catch (err) {
       console.error("Chat Message Error:", err);
@@ -124,6 +124,7 @@ export default function useGemini() {
     startConversation,
     sendMessage,
     transcribeAudio,
+    chatState,
     hasActiveChat: !!chatState
   };
 }

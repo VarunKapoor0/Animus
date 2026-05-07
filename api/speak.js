@@ -1,26 +1,27 @@
 // Vercel serverless function — converts text to speech using Groq Orpheus TTS.
+// Accepts voice and vocal_direction from Gemini vision response.
 // Returns audio/wav binary stream.
-// Orpheus has a 200 character input limit — we send first 1-2 sentences only.
+
+const VALID_VOICES = ['autumn', 'diana', 'hannah', 'troy', 'austin', 'daniel'];
+const VALID_DIRECTIONS = ['cheerful', 'calm', 'dramatic', 'whisper', 'excited', 'serious', 'sad'];
 
 function sanitizeForTTS(text) {
   return text
-    .replace(/\*/g, '')           // remove markdown bold/italic asterisks
-    .replace(/["""]/g, '"')       // normalize smart quotes
-    .replace(/[''']/g, "'")       // normalize smart apostrophes
+    .replace(/\*/g, '')           // remove markdown asterisks
+    .replace(/[\u201c\u201d"]/g, '"')  // normalize smart quotes
+    .replace(/[\u2018\u2019']/g, "'")  // normalize smart apostrophes
     .replace(/[^\x00-\x7F]/g, '') // strip non-ASCII
     .replace(/\s+/g, ' ')         // collapse whitespace
     .trim();
 }
 
-function extractFirstSentences(text, maxChars = 180) {
-  // Split on sentence boundaries
+function extractFirstSentences(text, maxChars = 160) {
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
   let result = '';
   for (const sentence of sentences) {
     if ((result + sentence).length > maxChars) break;
     result += sentence;
   }
-  // If even the first sentence is too long, truncate at word boundary
   if (!result) {
     result = text.substring(0, maxChars).replace(/\s\S*$/, '...');
   }
@@ -33,33 +34,30 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'OPTIONS,POST');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
+  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    console.error('GROQ_API_KEY is not set');
-    return res.status(500).json({ error: 'GROQ_API_KEY is not configured.' });
-  }
+  if (!apiKey) return res.status(500).json({ error: 'GROQ_API_KEY is not configured.' });
 
-  let { text } = req.body;
-  if (!text) {
-    return res.status(400).json({ error: 'No text provided.' });
-  }
+  let { text, voice, vocal_direction } = req.body;
+  if (!text) return res.status(400).json({ error: 'No text provided.' });
 
-  // Sanitize then extract first complete sentences up to 180 chars
+  // Validate and default
+  const selectedVoice = VALID_VOICES.includes(voice) ? voice : 'diana';
+  const selectedDirection = VALID_DIRECTIONS.includes(vocal_direction) ? vocal_direction : null;
+
+  // Sanitize text
   text = sanitizeForTTS(text);
-  text = extractFirstSentences(text, 180);
 
-  if (!text) {
-    return res.status(400).json({ error: 'Text empty after sanitization.' });
-  }
+  // Budget: direction tag takes ~15 chars, leave rest for content
+  const maxChars = selectedDirection ? 160 : 180;
+  text = extractFirstSentences(text, maxChars);
+
+  if (!text) return res.status(400).json({ error: 'Text empty after sanitization.' });
+
+  // Prepend vocal direction tag if provided
+  const input = selectedDirection ? `[${selectedDirection}] ${text}` : text;
 
   try {
     const response = await fetch('https://api.groq.com/openai/v1/audio/speech', {
@@ -70,8 +68,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'canopylabs/orpheus-v1-english',
-        input: text,
-        voice: 'diana',
+        input,
+        voice: selectedVoice,
         response_format: 'wav',
       }),
     });

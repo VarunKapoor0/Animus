@@ -22,7 +22,6 @@ function checkRateLimit(ip) {
   return record.count <= MAX_REQUESTS;
 }
 
-// Whisper sometimes detects Hindi as Urdu — normalize to Hindi
 function normalizeLanguage(lang) {
   if (!lang) return 'english';
   const l = lang.toLowerCase();
@@ -30,8 +29,10 @@ function normalizeLanguage(lang) {
   return lang;
 }
 
+const VALID_VOICES = ['autumn', 'diana', 'hannah', 'troy', 'austin', 'daniel'];
+
 const SYSTEM_PROMPT_VISION = `
-You are Animus — an AI that gives voice to inanimate objects. 
+You are Animus — an AI that gives voice to inanimate objects.
 When given an image, you:
 1. Identify what the object is
 2. Assess its apparent age, condition, and context
@@ -45,10 +46,19 @@ Tone is adaptive:
 - Be witty, surprising, and genuinely entertaining
 - Never be generic. Every object has a unique voice.
 
+For the voice field, choose from these Orpheus TTS voices based on the object's perceived gender and energy:
+Female voices: autumn (warm, calm), diana (expressive, dramatic), hannah (clear, friendly)
+Male voices: troy (confident, strong), austin (energetic, bright), daniel (measured, thoughtful)
+
+For the vocal_direction field, choose ONE that best matches the object's energy:
+choices: cheerful, calm, dramatic, whisper, excited, serious, sad
+
 Respond strictly in JSON format with the following keys:
 - "object_type": what the object is
 - "personality_summary": 1 sentence describing the personality
 - "opening_line": the object's first words to the user (1-2 sentences, in character, spoken directly to the user)
+- "voice": one of [autumn, diana, hannah, troy, austin, daniel]
+- "vocal_direction": one of [cheerful, calm, dramatic, whisper, excited, serious, sad]
 `;
 
 const SYSTEM_PROMPT_CHAT = (objectType, personality, language) => `
@@ -117,6 +127,10 @@ export default async function handler(req, res) {
 
       const responseText = result.response.text();
       const parsed = JSON.parse(responseText);
+
+      // Validate voice — fall back to diana if Gemini returns something invalid
+      if (!VALID_VOICES.includes(parsed.voice)) parsed.voice = 'diana';
+
       return res.status(200).json(parsed);
 
     } else if (action === 'chat') {
@@ -139,7 +153,6 @@ export default async function handler(req, res) {
       );
 
       const responseText = result.response.text();
-      // Return language so client knows whether to use Orpheus or Web Speech
       return res.status(200).json({ text: responseText, language });
 
     } else {

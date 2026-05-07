@@ -19,10 +19,8 @@ function App() {
   
   const isWebXRSupported = 'xr' in navigator;
 
-  // On first load, replace current history entry with landing state
   useEffect(() => {
     window.history.replaceState({ page: 'landing' }, '');
-
     const handlePopState = (e) => {
       if (!e.state || e.state.page === 'landing') {
         setLanded(false);
@@ -31,7 +29,6 @@ function App() {
         setTapPos(null);
       }
     };
-
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
@@ -64,7 +61,13 @@ function App() {
   const handleStartChat = async () => {
     if (!visionData) return;
     setChatActive(true);
-    await startConversation(visionData.object_type, visionData.personality_summary);
+    // Pass voice and vocal_direction from Gemini vision response
+    await startConversation(
+      visionData.object_type,
+      visionData.personality_summary,
+      visionData.voice,
+      visionData.vocal_direction
+    );
   };
 
   const handleCloseChat = () => {
