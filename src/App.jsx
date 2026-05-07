@@ -79,10 +79,8 @@ function App() {
     setShowDebatePrompt(false);
     if (!imageSrc) return;
 
-    // Start AR session on first scan if supported
     if (arSupported && !isARActive) startAR();
 
-    // Capture 3D hit position if AR is active
     const worldPos = isARActive ? captureHitPosition() : null;
     setTapWorldPos(worldPos);
 
@@ -150,9 +148,7 @@ function App() {
         const filtered = prev.filter(m => m.object_type !== entry.object_type);
         return [{ ...entry, x: markerPos.x, y: markerPos.y }, ...filtered].slice(0, MAX_MARKERS);
       });
-      if (isARActive && tapWorldPos) {
-        addARMarker(visionData.object_type, tapWorldPos);
-      }
+      if (isARActive && tapWorldPos) addARMarker(visionData.object_type, tapWorldPos);
     }
     setChatActive(false);
     setVisionData(null);
@@ -206,14 +202,15 @@ function App() {
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-sans scanlines">
-      {/* Camera always visible — AR passthrough is handled by WebXR session separately */}
-      <Camera />
+      {/* React camera — hidden in AR mode, WebXR handles passthrough */}
+      <Camera hidden={isARActive} />
 
       {isIdle && (
         <div className="absolute inset-0 z-10 pointer-events-auto cursor-crosshair" onClick={handleScreenTap} />
       )}
 
-      <AROverlay containerRef={containerRef}>
+      {/* Pass isARActive so Three.js canvas z-index is elevated in AR mode */}
+      <AROverlay containerRef={containerRef} isARActive={isARActive}>
         <TapRipple x={ripplePos.x} y={ripplePos.y} trigger={rippleTrigger} />
 
         <SpatialMarkers
@@ -223,7 +220,6 @@ function App() {
           arScreenPositions={markerScreenPositions}
         />
 
-        {/* BoundingBox only shown during active scan */}
         {isProcessing && (
           <BoundingBox
             x={tapPos?.x ?? null}
