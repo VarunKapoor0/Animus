@@ -17,6 +17,8 @@ import useGemini from './hooks/useGemini';
 const MAX_HISTORY = 5;
 const MAX_MARKERS = 8;
 
+const centerPos = () => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+
 function App() {
   const [landed, setLanded] = useState(false);
   const [visionData, setVisionData] = useState(null);
@@ -85,6 +87,15 @@ function App() {
     }
   };
 
+  // Scan button — fires ripple at center since no tap position
+  const handleScanButton = (img) => {
+    const pos = centerPos();
+    setTapPos(pos);
+    setRipplePos(pos);
+    setRippleTrigger(k => k + 1);
+    handleScan(img);
+  };
+
   const handleTalkAlone = async () => {
     setShowDebatePrompt(false);
     setChatActive(true);
@@ -125,13 +136,12 @@ function App() {
         const filtered = prev.filter(h => h.object_type !== entry.object_type);
         return [entry, ...filtered].slice(0, MAX_HISTORY);
       });
-      // Only save spatial marker if we have a tap position
-      if (tapPos) {
-        setMarkers(prev => {
-          const filtered = prev.filter(m => m.object_type !== entry.object_type);
-          return [{ ...entry, x: tapPos.x, y: tapPos.y }, ...filtered].slice(0, MAX_MARKERS);
-        });
-      }
+      // Always save marker — use tapPos if available, else center
+      const markerPos = tapPos || centerPos();
+      setMarkers(prev => {
+        const filtered = prev.filter(m => m.object_type !== entry.object_type);
+        return [{ ...entry, x: markerPos.x, y: markerPos.y }, ...filtered].slice(0, MAX_MARKERS);
+      });
     }
     setChatActive(false);
     setVisionData(null);
@@ -196,13 +206,9 @@ function App() {
       )}
 
       <AROverlay isSupported={isWebXRSupported}>
-        {/* Tap ripple — separate position state so it doesn't unmount */}
         <TapRipple x={ripplePos.x} y={ripplePos.y} trigger={rippleTrigger} />
-
-        {/* Spatial markers — rendered inside overlay but pointer-events handled per element */}
         <SpatialMarkers markers={isIdle ? markers : []} onTap={handleMarkerTap} />
 
-        {/* Bounding box */}
         {(isProcessing || visionData || chatActive || debateActive) && (
           <BoundingBox
             x={tapPos?.x ?? null}
@@ -282,7 +288,7 @@ function App() {
               <>
                 <ScanHistory history={scanHistory} onResume={handleResume} />
                 <ScanButton
-                  onScan={(img) => { setTapPos(null); handleScan(img); }}
+                  onScan={handleScanButton}
                   isScanning={isProcessing}
                 />
               </>
