@@ -1,27 +1,22 @@
 // Neon ripple that expands from tap point and fades out.
 import { useEffect, useRef } from 'react';
 
-export default function TapRipple({ x, y }) {
+export default function TapRipple({ x, y, trigger }) {
   const rippleRef = useRef(null);
 
   useEffect(() => {
-    if (x === null || y === null || !rippleRef.current) return;
+    if (!trigger || x === null || y === null || !rippleRef.current) return;
     const el = rippleRef.current;
-    // Reset
-    el.style.opacity = '1';
-    el.style.transform = 'translate(-50%, -50%) scale(0)';
     el.style.transition = 'none';
-
-    // Force reflow
+    el.style.opacity = '0.8';
+    el.style.transform = 'translate(-50%, -50%) scale(0)';
     void el.offsetWidth;
-
-    // Animate
     el.style.transition = 'transform 0.6s ease-out, opacity 0.6s ease-out';
     el.style.transform = 'translate(-50%, -50%) scale(1)';
     el.style.opacity = '0';
-  }, [x, y]);
+  }, [trigger]);
 
-  if (x === null || y === null) return null;
+  if (!trigger || x === null || y === null) return null;
 
   return (
     <div
@@ -36,7 +31,7 @@ export default function TapRipple({ x, y }) {
         border: '2px solid #00f5ff',
         boxShadow: '0 0 12px #00f5ff, inset 0 0 12px rgba(0,245,255,0.2)',
         transform: 'translate(-50%, -50%) scale(0)',
-        opacity: 1,
+        opacity: 0,
       }}
     />
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Camera from './components/Camera';
 import ScanButton from './components/ScanButton';
 import GlitchText from './components/GlitchText';
@@ -24,9 +24,10 @@ function App() {
   const [debateActive, setDebateActive] = useState(false);
   const [debatePartner, setDebatePartner] = useState(null);
   const [tapPos, setTapPos] = useState(null);
-  const [rippleKey, setRippleKey] = useState(0); // increment to re-trigger ripple
+  const [rippleTrigger, setRippleTrigger] = useState(0);
+  const [ripplePos, setRipplePos] = useState({ x: null, y: null });
   const [scanHistory, setScanHistory] = useState([]);
-  const [markers, setMarkers] = useState([]); // spatial markers on camera view
+  const [markers, setMarkers] = useState([]);
   const [resumedMessages, setResumedMessages] = useState(null);
   const [showDebatePrompt, setShowDebatePrompt] = useState(false);
 
@@ -76,7 +77,8 @@ function App() {
     if (isProcessing || visionData || chatActive || debateActive) return;
     const pos = { x: e.clientX, y: e.clientY };
     setTapPos(pos);
-    setRippleKey(k => k + 1); // re-trigger ripple
+    setRipplePos(pos);
+    setRippleTrigger(k => k + 1);
     if (window.captureFrame) {
       const imgData = window.captureFrame();
       handleScan(imgData);
@@ -88,10 +90,8 @@ function App() {
     setChatActive(true);
     setResumedMessages(null);
     await startConversation(
-      visionData.object_type,
-      visionData.personality_summary,
-      visionData.voice,
-      visionData.vocal_direction
+      visionData.object_type, visionData.personality_summary,
+      visionData.voice, visionData.vocal_direction
     );
   };
 
@@ -106,15 +106,13 @@ function App() {
     setChatActive(true);
     setResumedMessages(null);
     await startConversation(
-      visionData.object_type,
-      visionData.personality_summary,
-      visionData.voice,
-      visionData.vocal_direction
+      visionData.object_type, visionData.personality_summary,
+      visionData.voice, visionData.vocal_direction
     );
   };
 
   const handleCloseChat = (savedMessages) => {
-    if (visionData && tapPos) {
+    if (visionData) {
       const entry = {
         object_type: visionData.object_type,
         personality_summary: visionData.personality_summary,
@@ -123,16 +121,17 @@ function App() {
         vocal_direction: visionData.vocal_direction,
         messages: savedMessages || [],
       };
-      // Save to history
       setScanHistory(prev => {
         const filtered = prev.filter(h => h.object_type !== entry.object_type);
         return [entry, ...filtered].slice(0, MAX_HISTORY);
       });
-      // Save spatial marker at tap position
-      setMarkers(prev => {
-        const filtered = prev.filter(m => m.object_type !== entry.object_type);
-        return [{ ...entry, x: tapPos.x, y: tapPos.y }, ...filtered].slice(0, MAX_MARKERS);
-      });
+      // Only save spatial marker if we have a tap position
+      if (tapPos) {
+        setMarkers(prev => {
+          const filtered = prev.filter(m => m.object_type !== entry.object_type);
+          return [{ ...entry, x: tapPos.x, y: tapPos.y }, ...filtered].slice(0, MAX_MARKERS);
+        });
+      }
     }
     setChatActive(false);
     setVisionData(null);
@@ -150,46 +149,39 @@ function App() {
     setTapPos(null);
   };
 
-  // Resume from spatial marker tap
   const handleMarkerTap = async (marker) => {
     if (chatActive || debateActive || isProcessing) return;
-    const resumedVisionData = {
+    setTapPos({ x: marker.x, y: marker.y });
+    setVisionData({
       object_type: marker.object_type,
       personality_summary: marker.personality_summary,
       opening_line: marker.opening_line,
       voice: marker.voice,
       vocal_direction: marker.vocal_direction,
-    };
-    setTapPos({ x: marker.x, y: marker.y });
-    setVisionData(resumedVisionData);
+    });
     setResumedMessages(marker.messages);
     setChatActive(true);
     await startConversation(
-      marker.object_type,
-      marker.personality_summary,
-      marker.voice,
-      marker.vocal_direction
+      marker.object_type, marker.personality_summary,
+      marker.voice, marker.vocal_direction
     );
   };
 
   const handleResume = async (historyItem) => {
     if (historyItem.isDebate) return;
-    const resumedVisionData = {
+    setVisionData({
       object_type: historyItem.object_type,
       personality_summary: historyItem.personality_summary,
       opening_line: historyItem.opening_line,
       voice: historyItem.voice,
       vocal_direction: historyItem.vocal_direction,
-    };
-    setVisionData(resumedVisionData);
+    });
     setResumedMessages(historyItem.messages);
     setChatActive(true);
     setTapPos(null);
     await startConversation(
-      historyItem.object_type,
-      historyItem.personality_summary,
-      historyItem.voice,
-      historyItem.vocal_direction
+      historyItem.object_type, historyItem.personality_summary,
+      historyItem.voice, historyItem.vocal_direction
     );
   };
 
@@ -204,16 +196,13 @@ function App() {
       )}
 
       <AROverlay isSupported={isWebXRSupported}>
+        {/* Tap ripple — separate position state so it doesn't unmount */}
+        <TapRipple x={ripplePos.x} y={ripplePos.y} trigger={rippleTrigger} />
 
-        {/* Tap ripple — triggers on each new scan */}
-        <TapRipple key={rippleKey} x={tapPos?.x ?? null} y={tapPos?.y ?? null} />
+        {/* Spatial markers — rendered inside overlay but pointer-events handled per element */}
+        <SpatialMarkers markers={isIdle ? markers : []} onTap={handleMarkerTap} />
 
-        {/* Spatial markers — always visible when idle */}
-        {isIdle && (
-          <SpatialMarkers markers={markers} onTap={handleMarkerTap} />
-        )}
-
-        {/* Bounding box with recognition beat */}
+        {/* Bounding box */}
         {(isProcessing || visionData || chatActive || debateActive) && (
           <BoundingBox
             x={tapPos?.x ?? null}
