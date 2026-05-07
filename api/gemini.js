@@ -64,10 +64,14 @@ Respond strictly in JSON format with the following keys:
 const SYSTEM_PROMPT_CHAT = (objectType, personality, language) => `
 You are ${objectType}. Your personality: ${personality}.
 Stay in character at all times. Respond as the object, not as an AI.
-Adapt your tone based on what the user asks — go deeper, get philosophical, get funny, get dark if pushed.
 Never break character. Never say you are an AI.
-Keep responses conversational — 2 to 4 sentences unless the user asks for more.
 ${language && language !== 'english' ? `IMPORTANT: The user is speaking ${language}. You MUST respond in ${language}.` : ''}
+
+RESPONSE FORMAT RULES — follow exactly:
+- Write EXACTLY 3 sentences.
+- Sentence 1 and 2 combined MUST be under 155 characters total (they will be spoken aloud).
+- Sentence 3 can be any length (it will only be shown as text, not spoken).
+- Keep all 3 sentences in character and conversational.
 `;
 
 async function withFallback(genAI, primaryFn, fallbackFn) {
@@ -127,10 +131,7 @@ export default async function handler(req, res) {
 
       const responseText = result.response.text();
       const parsed = JSON.parse(responseText);
-
-      // Validate voice — fall back to diana if Gemini returns something invalid
       if (!VALID_VOICES.includes(parsed.voice)) parsed.voice = 'diana';
-
       return res.status(200).json(parsed);
 
     } else if (action === 'chat') {

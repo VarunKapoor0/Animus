@@ -1,5 +1,5 @@
 // Vercel serverless function — converts text to speech using Groq Orpheus TTS.
-// Accepts voice and vocal_direction from Gemini vision response.
+// Speaks only the first 2 sentences of the response (guaranteed under 160 chars by Gemini prompt).
 // Returns audio/wav binary stream.
 
 const VALID_VOICES = ['autumn', 'diana', 'hannah', 'troy', 'austin', 'daniel'];
@@ -7,25 +7,23 @@ const VALID_DIRECTIONS = ['cheerful', 'calm', 'dramatic', 'whisper', 'excited', 
 
 function sanitizeForTTS(text) {
   return text
-    .replace(/\*/g, '')           // remove markdown asterisks
-    .replace(/[\u201c\u201d"]/g, '"')  // normalize smart quotes
-    .replace(/[\u2018\u2019']/g, "'")  // normalize smart apostrophes
-    .replace(/[^\x00-\x7F]/g, '') // strip non-ASCII
-    .replace(/\s+/g, ' ')         // collapse whitespace
+    .replace(/\*/g, '')
+    .replace(/[\u201c\u201d"]/g, '"')
+    .replace(/[\u2018\u2019']/g, "'")
+    .replace(/[^\x00-\x7F]/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
-function extractFirstSentences(text, maxChars = 160) {
+// Extract exactly the first 2 sentences for TTS
+function extractFirstTwoSentences(text) {
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  let result = '';
-  for (const sentence of sentences) {
-    if ((result + sentence).length > maxChars) break;
-    result += sentence;
+  const first two = sentences.slice(0, 2).join(' ').trim();
+  // Hard safety cap at 170 chars in case Gemini doesn't follow the format rule
+  if (firstTwo.length > 170) {
+    return firstTwo.substring(0, 170).replace(/\s\S*$/, '...');
   }
-  if (!result) {
-    result = text.substring(0, maxChars).replace(/\s\S*$/, '...');
-  }
-  return result.trim();
+  return firstTwo;
 }
 
 export default async function handler(req, res) {
@@ -43,20 +41,14 @@ export default async function handler(req, res) {
   let { text, voice, vocal_direction } = req.body;
   if (!text) return res.status(400).json({ error: 'No text provided.' });
 
-  // Validate and default
   const selectedVoice = VALID_VOICES.includes(voice) ? voice : 'diana';
   const selectedDirection = VALID_DIRECTIONS.includes(vocal_direction) ? vocal_direction : null;
 
-  // Sanitize text
   text = sanitizeForTTS(text);
-
-  // Budget: direction tag takes ~15 chars, leave rest for content
-  const maxChars = selectedDirection ? 160 : 180;
-  text = extractFirstSentences(text, maxChars);
+  text = extractFirstTwoSentences(text);
 
   if (!text) return res.status(400).json({ error: 'Text empty after sanitization.' });
 
-  // Prepend vocal direction tag if provided
   const input = selectedDirection ? `[${selectedDirection}] ${text}` : text;
 
   try {
