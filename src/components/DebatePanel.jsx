@@ -1,7 +1,4 @@
 // Dual-object conversation panel.
-// Objects take turns speaking. User controls pacing with CONTINUE.
-// User can optionally speak/type before pressing CONTINUE to interject.
-
 import { useState, useRef, useEffect } from 'react';
 
 export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose }) {
@@ -11,13 +8,21 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
   const [userInput, setUserInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+
+  // Separate Gemini history per object — each object only sees its own turns
   const historyA = useRef([]);
   const historyB = useRef([]);
+  // Track the last thing each object said for cross-referencing
+  const lastSaidA = useRef(null);
+  const lastSaidB = useRef(null);
+  // Pending user interject — stored in ref so speakTurn always sees the latest value
+  const pendingInterject = useRef(null);
+
   const endRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const currentAudioRef = useRef(null);
-  const messagesRef = useRef(messages);
+  const messagesRef = useRef([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   useEffect(() => {
@@ -25,7 +30,7 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
   }, [messages, turnState]);
 
   useEffect(() => {
-    speakTurn('A', null, null);
+    speakTurn('A');
     return () => stopAudio();
   }, []);
 
@@ -38,17 +43,26 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   };
 
-  const speakTurn = async (speaker, lastMessage, userInterject) => {
+  const speakTurn = async (speaker) => {
     setTurnState('speaking');
     const isA = speaker === 'A';
     const self = isA ? objectA : objectB;
     const other = isA ? objectB : objectA;
     const selfHistory = isA ? historyA : historyB;
+    const lastOtherSaid = isA ? lastSaidB.current : lastSaidA.current;
+    const interject = pendingInterject.current;
+    pendingInterject.current = null; // clear after reading
 
-    let userMsg = lastMessage
-      ? `${other.object_type} said: "${lastMessage}"`
-      : `Start a conversation with ${other.object_type}. Introduce yourself and say something provocative or interesting to them.`;
-    if (userInterject) userMsg += ` The human also says: "${userInterject}"`;
+    // Build the user message for Gemini
+    let userMsg;
+    if (!lastOtherSaid) {
+      // First turn — Object A opens
+      userMsg = `You are starting a conversation with ${other.object_type}. Introduce yourself and say something provocative or interesting to get them talking.`;
+    } else {
+      userMsg = `${other.object_type} just said: "${lastOtherSaid}".${
+        interject ? ` The human also says: "${interject}". Respond to both ${other.object_type} and the human.` : ''
+      } Respond directly to ${other.object_type}.`;
+    }
 
     try {
       const response = await fetch('/api/gemini', {
@@ -71,14 +85,19 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
       const data = await response.json();
       const text = data.text;
 
+      // Update this speaker's Gemini history
       selfHistory.current = [
         ...selfHistory.current,
         { role: 'user', parts: [{ text: userMsg }] },
         { role: 'model', parts: [{ text }] },
       ];
 
+      // Store what this speaker just said for the other's next turn
+      if (isA) lastSaidA.current = text;
+      else lastSaidB.current = text;
+
       setMessages(prev => [...prev, { speaker, object_type: self.object_type, text }]);
-      playTTS(text, self.voice, self.vocal_direction);
+      await playTTS(text, self.voice, self.vocal_direction);
       setCurrentSpeaker(isA ? 'B' : 'A');
       setTurnState('paused');
     } catch (err) {
@@ -101,7 +120,7 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
         const audio = new Audio(url);
         currentAudioRef.current = audio;
         audio.onended = () => URL.revokeObjectURL(url);
-        audio.play();
+        await audio.play();
       }
     } catch (err) {
       console.warn('TTS failed:', err);
@@ -109,18 +128,16 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
   };
 
   const handleContinue = () => {
-    const lastMsg = messagesRef.current.length > 0
-      ? messagesRef.current[messagesRef.current.length - 1].text
-      : null;
     const interject = userInput.trim() || null;
 
-    // Show user's message in chat before proceeding
+    // Show user message in chat if they wrote something
     if (interject) {
       setMessages(prev => [...prev, { speaker: 'USER', object_type: 'YOU', text: interject }]);
+      pendingInterject.current = interject; // store in ref so speakTurn reads it
     }
 
     setUserInput('');
-    speakTurn(currentSpeaker, lastMsg, interject);
+    speakTurn(currentSpeaker);
   };
 
   const handleClose = () => {
@@ -128,7 +145,7 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
     onClose({
       object_type: `${objectA.object_type} × ${objectB.object_type}`,
       personality_summary: 'Connection session',
-      opening_line: messages[0]?.text || '',
+      opening_line: messagesRef.current[0]?.text || '',
       voice: objectA.voice,
       vocal_direction: objectA.vocal_direction,
       messages: messagesRef.current.map(m => ({
@@ -173,14 +190,14 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
   return (
     <div className="absolute inset-0 m-4 sm:m-8 panel-bg border border-neon-cyan/50 flex flex-col pointer-events-auto shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden">
       {/* Header */}
-      <div className="bg-neon-cyan/10 border-b border-neon-cyan/30 px-4 py-3 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse"></div>
-          <span className={`font-mono text-xs font-bold uppercase tracking-wider ${colorA}`}>{objectA.object_type}</span>
-          <span className="font-mono text-xs text-white/30">×</span>
-          <span className={`font-mono text-xs font-bold uppercase tracking-wider ${colorB}`}>{objectB.object_type}</span>
+      <div className="bg-neon-cyan/10 border-b border-neon-cyan/30 px-4 py-3 flex justify-between items-center min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse flex-none"></div>
+          <span className={`font-mono text-xs font-bold uppercase tracking-wider truncate ${colorA}`}>{objectA.object_type}</span>
+          <span className="font-mono text-xs text-white/30 flex-none">×</span>
+          <span className={`font-mono text-xs font-bold uppercase tracking-wider truncate ${colorB}`}>{objectB.object_type}</span>
         </div>
-        <button onClick={handleClose} className="text-gray-400 hover:text-neon-magenta transition-colors font-mono text-sm uppercase px-2 py-1">
+        <button onClick={handleClose} className="flex-none ml-2 text-gray-400 hover:text-neon-magenta transition-colors font-mono text-sm uppercase px-2 py-1">
           [End]
         </button>
       </div>
@@ -212,7 +229,7 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
         })}
 
         {turnState === 'speaking' && (
-          <div className="mr-auto max-w-[85%]">
+          <div className={`mr-auto max-w-[85%] ${currentSpeaker === 'B' ? 'ml-auto mr-0' : ''}`}>
             <div className={`text-[10px] mb-1 opacity-60 uppercase ${currentSpeaker === 'A' ? colorA : colorB}`}>
               {currentSpeaker === 'A' ? objectA.object_type : objectB.object_type}
             </div>
@@ -224,14 +241,14 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
 
         {turnState === 'error' && (
           <div className="text-center font-mono text-xs text-neon-magenta py-2">
-            CONNECTION LOST — reload to retry
+            CONNECTION LOST — try again
           </div>
         )}
 
         <div ref={endRef} />
       </div>
 
-      {/* Controls — paused state */}
+      {/* Paused — show interject + continue */}
       {turnState === 'paused' && (
         <div className="p-4 bg-black/60 border-t border-neon-cyan/20 space-y-3">
           <div className="flex gap-2">
@@ -268,7 +285,7 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
         </div>
       )}
 
-      {/* Speaking — controls locked */}
+      {/* Speaking — locked */}
       {turnState === 'speaking' && (
         <div className="p-4 bg-black/60 border-t border-neon-cyan/20">
           <div className="w-full py-3 font-mono text-sm tracking-widest uppercase text-center text-white/20 border border-white/5 rounded">
