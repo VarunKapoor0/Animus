@@ -1,9 +1,10 @@
 // Vercel serverless function — converts text to speech using Groq Orpheus TTS.
-// Speaks only the first 2 sentences of the response (guaranteed under 160 chars by Gemini prompt).
+// Hard limit: final input (including direction tag) must be under 200 chars.
 // Returns audio/wav binary stream.
 
 const VALID_VOICES = ['autumn', 'diana', 'hannah', 'troy', 'austin', 'daniel'];
 const VALID_DIRECTIONS = ['cheerful', 'calm', 'dramatic', 'whisper', 'excited', 'serious', 'sad'];
+const ORPHEUS_HARD_LIMIT = 199; // stay safely under 200
 
 function sanitizeForTTS(text) {
   return text
@@ -15,15 +16,14 @@ function sanitizeForTTS(text) {
     .trim();
 }
 
-// Extract exactly the first 2 sentences for TTS
-function extractFirstTwoSentences(text) {
+// Extract first 2 sentences, then hard-cap at maxChars at a word boundary
+function extractAndCap(text, maxChars) {
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  const firstTwo = sentences.slice(0, 2).join(' ').trim();
-  // Hard safety cap at 170 chars in case Gemini doesn't follow the format rule
-  if (firstTwo.length > 170) {
-    return firstTwo.substring(0, 170).replace(/\s\S*$/, '...');
+  let result = sentences.slice(0, 2).join(' ').trim();
+  if (result.length > maxChars) {
+    result = result.substring(0, maxChars).replace(/\s\S*$/, '').trim();
   }
-  return firstTwo;
+  return result;
 }
 
 export default async function handler(req, res) {
@@ -44,12 +44,18 @@ export default async function handler(req, res) {
   const selectedVoice = VALID_VOICES.includes(voice) ? voice : 'diana';
   const selectedDirection = VALID_DIRECTIONS.includes(vocal_direction) ? vocal_direction : null;
 
+  // Direction tag takes up chars — budget accordingly
+  const directionPrefix = selectedDirection ? `[${selectedDirection}] ` : '';
+  const textBudget = ORPHEUS_HARD_LIMIT - directionPrefix.length;
+
   text = sanitizeForTTS(text);
-  text = extractFirstTwoSentences(text);
+  text = extractAndCap(text, textBudget);
 
   if (!text) return res.status(400).json({ error: 'Text empty after sanitization.' });
 
-  const input = selectedDirection ? `[${selectedDirection}] ${text}` : text;
+  // Final assembled input — guaranteed under 200 chars
+  const input = directionPrefix + text;
+  console.log(`TTS input (${input.length} chars): ${input}`);
 
   try {
     const response = await fetch('https://api.groq.com/openai/v1/audio/speech', {
