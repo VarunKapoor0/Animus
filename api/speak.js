@@ -18,7 +18,7 @@ function sanitizeForTTS(text) {
 // Extract exactly the first 2 sentences for TTS
 function extractFirstTwoSentences(text) {
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  const first two = sentences.slice(0, 2).join(' ').trim();
+  const firstTwo = sentences.slice(0, 2).join(' ').trim();
   // Hard safety cap at 170 chars in case Gemini doesn't follow the format rule
   if (firstTwo.length > 170) {
     return firstTwo.substring(0, 170).replace(/\s\S*$/, '...');
