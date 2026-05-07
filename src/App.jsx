@@ -26,7 +26,7 @@ function App() {
   const [debateActive, setDebateActive] = useState(false);
   const [debatePartner, setDebatePartner] = useState(null);
   const [tapPos, setTapPos] = useState(null);
-  const [tapWorldPos, setTapWorldPos] = useState(null); // THREE.Vector3 in AR mode
+  const [tapWorldPos, setTapWorldPos] = useState(null);
   const [rippleTrigger, setRippleTrigger] = useState(0);
   const [ripplePos, setRipplePos] = useState({ x: null, y: null });
   const [scanHistory, setScanHistory] = useState([]);
@@ -43,7 +43,6 @@ function App() {
     startAR,
     captureHitPosition,
     addARMarker,
-    removeARMarker,
   } = useWebXR();
 
   useEffect(() => {
@@ -80,7 +79,7 @@ function App() {
     setShowDebatePrompt(false);
     if (!imageSrc) return;
 
-    // Start AR session on first scan if supported (Android Chrome)
+    // Start AR session on first scan if supported
     if (arSupported && !isARActive) startAR();
 
     // Capture 3D hit position if AR is active
@@ -140,7 +139,7 @@ function App() {
         voice: visionData.voice,
         vocal_direction: visionData.vocal_direction,
         messages: savedMessages || [],
-        worldPos: tapWorldPos || null, // store 3D position if available
+        worldPos: tapWorldPos || null,
       };
       setScanHistory(prev => {
         const filtered = prev.filter(h => h.object_type !== entry.object_type);
@@ -151,7 +150,6 @@ function App() {
         const filtered = prev.filter(m => m.object_type !== entry.object_type);
         return [{ ...entry, x: markerPos.x, y: markerPos.y }, ...filtered].slice(0, MAX_MARKERS);
       });
-      // Place AR marker if in AR mode and we have a world position
       if (isARActive && tapWorldPos) {
         addARMarker(visionData.object_type, tapWorldPos);
       }
@@ -174,9 +172,7 @@ function App() {
 
   const handleMarkerTap = async (marker) => {
     if (chatActive || debateActive || isProcessing) return;
-    if (marker.worldPos && isARActive) {
-      setTapWorldPos(marker.worldPos);
-    }
+    if (marker.worldPos && isARActive) setTapWorldPos(marker.worldPos);
     setTapPos({ x: marker.x, y: marker.y });
     setVisionData({
       object_type: marker.object_type,
@@ -210,8 +206,8 @@ function App() {
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-sans scanlines">
-      {/* Camera only shown in fallback mode — AR mode uses WebXR passthrough */}
-      {!isARActive && <Camera />}
+      {/* Camera always visible — AR passthrough is handled by WebXR session separately */}
+      <Camera />
 
       {isIdle && (
         <div className="absolute inset-0 z-10 pointer-events-auto cursor-crosshair" onClick={handleScreenTap} />
@@ -227,12 +223,13 @@ function App() {
           arScreenPositions={markerScreenPositions}
         />
 
-        {(isProcessing || visionData || chatActive || debateActive) && (
+        {/* BoundingBox only shown during active scan */}
+        {isProcessing && (
           <BoundingBox
             x={tapPos?.x ?? null}
             y={tapPos?.y ?? null}
-            isScanning={isProcessing}
-            objectType={visionData?.object_type}
+            isScanning={true}
+            objectType={null}
           />
         )}
 
