@@ -4,6 +4,8 @@ import ScanButton from './components/ScanButton';
 import GlitchText from './components/GlitchText';
 import ObjectCard from './components/ObjectCard';
 import ChatPanel from './components/ChatPanel';
+import DebatePrompt from './components/DebatePrompt';
+import DebatePanel from './components/DebatePanel';
 import AROverlay from './components/AROverlay';
 import BoundingBox from './components/BoundingBox';
 import LandingPage from './components/LandingPage';
@@ -16,13 +18,15 @@ function App() {
   const [landed, setLanded] = useState(false);
   const [visionData, setVisionData] = useState(null);
   const [chatActive, setChatActive] = useState(false);
+  const [debateActive, setDebateActive] = useState(false);
+  const [debatePartner, setDebatePartner] = useState(null); // history item chosen for debate
   const [tapPos, setTapPos] = useState(null);
   const [scanHistory, setScanHistory] = useState([]);
-  // When resuming from history, store saved conversation messages
   const [resumedMessages, setResumedMessages] = useState(null);
+  // Whether to show the debate prompt (new scan + history exists)
+  const [showDebatePrompt, setShowDebatePrompt] = useState(false);
 
   const { isProcessing, error, identifyObject, startConversation, sendMessage, transcribeAudio } = useGemini();
-
   const isWebXRSupported = 'xr' in navigator;
 
   useEffect(() => {
@@ -32,8 +36,11 @@ function App() {
         setLanded(false);
         setVisionData(null);
         setChatActive(false);
+        setDebateActive(false);
+        setDebatePartner(null);
         setTapPos(null);
         setResumedMessages(null);
+        setShowDebatePrompt(false);
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -49,19 +56,48 @@ function App() {
 
   const handleScan = async (imageSrc) => {
     setChatActive(false);
+    setDebateActive(false);
+    setDebatePartner(null);
     setResumedMessages(null);
+    setShowDebatePrompt(false);
     if (!imageSrc) return;
     const result = await identifyObject(imageSrc);
-    if (result) setVisionData(result);
+    if (result) {
+      setVisionData(result);
+      // If history has items, show debate prompt instead of going straight to ObjectCard
+      if (scanHistory.length > 0) {
+        setShowDebatePrompt(true);
+      }
+    }
   };
 
   const handleScreenTap = (e) => {
-    if (isProcessing || visionData || chatActive) return;
+    if (isProcessing || visionData || chatActive || debateActive) return;
     setTapPos({ x: e.clientX, y: e.clientY });
     if (window.captureFrame) {
       const imgData = window.captureFrame();
       handleScan(imgData);
     }
+  };
+
+  // User chose "Talk alone" from the debate prompt
+  const handleTalkAlone = async () => {
+    setShowDebatePrompt(false);
+    setChatActive(true);
+    setResumedMessages(null);
+    await startConversation(
+      visionData.object_type,
+      visionData.personality_summary,
+      visionData.voice,
+      visionData.vocal_direction
+    );
+  };
+
+  // User chose "Connect" from the debate prompt
+  const handleStartDebate = (partner) => {
+    setShowDebatePrompt(false);
+    setDebatePartner(partner);
+    setDebateActive(true);
   };
 
   const handleStartChat = async () => {
@@ -76,7 +112,6 @@ function App() {
     );
   };
 
-  // Save conversation to history, then close
   const handleCloseChat = (savedMessages) => {
     if (visionData) {
       const entry = {
@@ -88,7 +123,6 @@ function App() {
         messages: savedMessages || [],
       };
       setScanHistory(prev => {
-        // Remove duplicate if same object was linked before
         const filtered = prev.filter(h => h.object_type !== entry.object_type);
         return [entry, ...filtered].slice(0, MAX_HISTORY);
       });
@@ -99,8 +133,19 @@ function App() {
     setResumedMessages(null);
   };
 
-  // Resume a previous conversation — no API call needed
+  const handleCloseDebate = (debateEntry) => {
+    // Save debate as a history entry
+    if (debateEntry) {
+      setScanHistory(prev => [debateEntry, ...prev].slice(0, MAX_HISTORY));
+    }
+    setDebateActive(false);
+    setDebatePartner(null);
+    setVisionData(null);
+    setTapPos(null);
+  };
+
   const handleResume = async (historyItem) => {
+    if (historyItem.isDebate) return; // debate entries are read-only for now
     const resumedVisionData = {
       object_type: historyItem.object_type,
       personality_summary: historyItem.personality_summary,
@@ -120,24 +165,19 @@ function App() {
     );
   };
 
+  const isIdle = !isProcessing && !visionData && !chatActive && !debateActive;
+
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-sans scanlines">
       <Camera />
 
-      {!isProcessing && !visionData && !chatActive && (
-        <div
-          className="absolute inset-0 z-10 pointer-events-auto cursor-crosshair"
-          onClick={handleScreenTap}
-        />
+      {isIdle && (
+        <div className="absolute inset-0 z-10 pointer-events-auto cursor-crosshair" onClick={handleScreenTap} />
       )}
 
       <AROverlay isSupported={isWebXRSupported}>
-        {(isProcessing || visionData || chatActive) && (
-          <BoundingBox
-            x={tapPos?.x ?? null}
-            y={tapPos?.y ?? null}
-            isScanning={isProcessing}
-          />
+        {(isProcessing || visionData || chatActive || debateActive) && (
+          <BoundingBox x={tapPos?.x ?? null} y={tapPos?.y ?? null} isScanning={isProcessing} />
         )}
 
         <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-6">
@@ -145,12 +185,16 @@ function App() {
             <div>
               <GlitchText text="ANIMUS_OS_v1.0" className="text-neon-cyan font-mono text-xs tracking-widest font-bold opacity-80" />
               <div className={`text-[10px] uppercase mt-1 animate-flicker font-mono ${error ? 'text-neon-magenta' : 'text-neon-blue'}`}>
-                Status: {error ? 'ERROR' : isProcessing ? 'PROCESSING' : chatActive ? 'LINK ESTABLISHED' : 'ONLINE'}
+                Status: {error ? 'ERROR' : isProcessing ? 'PROCESSING' : chatActive ? 'LINK ESTABLISHED' : debateActive ? 'DUAL LINK' : 'ONLINE'}
               </div>
               {error && <div className="text-xs text-neon-magenta mt-1 max-w-[200px]">{error}</div>}
             </div>
             <div className="w-8 h-8 rounded-full border border-neon-cyan/30 flex items-center justify-center">
-              <div className={`w-2 h-2 ${error ? 'bg-neon-magenta shadow-[0_0_8px_#ff00c8]' : 'bg-neon-cyan shadow-[0_0_8px_#00f5ff]'} rounded-full ${chatActive ? 'animate-none' : 'animate-pulse'}`}></div>
+              <div className={`w-2 h-2 ${
+                error ? 'bg-neon-magenta shadow-[0_0_8px_#ff00c8]'
+                : debateActive ? 'bg-neon-magenta shadow-[0_0_8px_#ff00c8]'
+                : 'bg-neon-cyan shadow-[0_0_8px_#00f5ff]'
+              } rounded-full ${(chatActive || debateActive) ? 'animate-none' : 'animate-pulse'}`}></div>
             </div>
           </header>
 
@@ -164,7 +208,18 @@ function App() {
               </div>
             )}
 
-            {visionData && !isProcessing && !chatActive && (
+            {/* Debate prompt — shown after scan when history exists */}
+            {visionData && !isProcessing && !chatActive && !debateActive && showDebatePrompt && (
+              <DebatePrompt
+                newObject={visionData}
+                history={scanHistory}
+                onConnect={handleStartDebate}
+                onTalkAlone={handleTalkAlone}
+              />
+            )}
+
+            {/* Normal object card — shown when no debate prompt */}
+            {visionData && !isProcessing && !chatActive && !debateActive && !showDebatePrompt && (
               <ObjectCard
                 visionData={visionData}
                 onClose={() => { setVisionData(null); setTapPos(null); }}
@@ -181,10 +236,19 @@ function App() {
                 onClose={handleCloseChat}
               />
             )}
+
+            {debateActive && visionData && debatePartner && (
+              <DebatePanel
+                objectA={visionData}
+                objectB={debatePartner}
+                transcribeAudio={transcribeAudio}
+                onClose={handleCloseDebate}
+              />
+            )}
           </div>
 
           <div className="pb-8 flex flex-col items-center gap-4 pointer-events-auto">
-            {!isProcessing && !visionData && !chatActive && (
+            {isIdle && (
               <>
                 <ScanHistory history={scanHistory} onResume={handleResume} />
                 <ScanButton

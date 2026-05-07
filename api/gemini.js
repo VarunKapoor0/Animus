@@ -74,15 +74,23 @@ RESPONSE FORMAT RULES — follow exactly:
 - Keep all 3 sentences in character and conversational.
 `;
 
+const SYSTEM_PROMPT_DEBATE = (selfType, selfPersonality, otherType, otherPersonality) => `
+You are ${selfType}. Your personality: ${selfPersonality}.
+You are in a live conversation with ${otherType}, who has this personality: ${otherPersonality}.
+Speak DIRECTLY to ${otherType}. Address them by name. Be opinionated, witty, and in character.
+Never break character. Never say you are an AI. Never talk to the user.
+Keep it to 2-3 sentences maximum — this is a rapid back-and-forth exchange.
+`;
+
 async function withFallback(genAI, primaryFn, fallbackFn) {
   try {
-    return await primaryFn(genAI.getGenerativeModel({ model: PRIMARY_MODEL }));
+    return await primaryFn();
   } catch (err) {
     const msg = err?.message || '';
     const isOverloaded = msg.includes('503') || msg.includes('overloaded') || msg.includes('unavailable');
     if (isOverloaded) {
       console.warn('Primary model overloaded, falling back to lite...');
-      return await fallbackFn(genAI.getGenerativeModel({ model: FALLBACK_MODEL }));
+      return await fallbackFn();
     }
     throw err;
   }
@@ -117,12 +125,12 @@ export default async function handler(req, res) {
 
       const result = await withFallback(
         genAI,
-        (model) => genAI.getGenerativeModel({
+        () => genAI.getGenerativeModel({
           model: PRIMARY_MODEL,
           systemInstruction: SYSTEM_PROMPT_VISION,
           generationConfig: { responseMimeType: "application/json" }
         }).generateContent(["Analyze this object.", imagePart]),
-        (model) => genAI.getGenerativeModel({
+        () => genAI.getGenerativeModel({
           model: FALLBACK_MODEL,
           systemInstruction: SYSTEM_PROMPT_VISION,
           generationConfig: { responseMimeType: "application/json" }
@@ -155,6 +163,26 @@ export default async function handler(req, res) {
 
       const responseText = result.response.text();
       return res.status(200).json({ text: responseText, language });
+
+    } else if (action === 'debate') {
+      const { selfType, selfPersonality, otherType, otherPersonality, message, history } = payload;
+      const systemInstruction = SYSTEM_PROMPT_DEBATE(selfType, selfPersonality, otherType, otherPersonality);
+
+      const result = await withFallback(
+        genAI,
+        async () => {
+          const model = genAI.getGenerativeModel({ model: PRIMARY_MODEL, systemInstruction });
+          const chat = model.startChat({ history: history || [] });
+          return await chat.sendMessage(message);
+        },
+        async () => {
+          const model = genAI.getGenerativeModel({ model: FALLBACK_MODEL, systemInstruction });
+          const chat = model.startChat({ history: history || [] });
+          return await chat.sendMessage(message);
+        }
+      );
+
+      return res.status(200).json({ text: result.response.text() });
 
     } else {
       return res.status(400).json({ error: 'Invalid action provided.' });
