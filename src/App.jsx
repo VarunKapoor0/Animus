@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Camera from './components/Camera';
 import ScanButton from './components/ScanButton';
 import GlitchText from './components/GlitchText';
@@ -8,22 +8,26 @@ import DebatePrompt from './components/DebatePrompt';
 import DebatePanel from './components/DebatePanel';
 import AROverlay from './components/AROverlay';
 import BoundingBox from './components/BoundingBox';
+import TapRipple from './components/TapRipple';
+import SpatialMarkers from './components/SpatialMarkers';
 import LandingPage from './components/LandingPage';
 import ScanHistory from './components/ScanHistory';
 import useGemini from './hooks/useGemini';
 
 const MAX_HISTORY = 5;
+const MAX_MARKERS = 8;
 
 function App() {
   const [landed, setLanded] = useState(false);
   const [visionData, setVisionData] = useState(null);
   const [chatActive, setChatActive] = useState(false);
   const [debateActive, setDebateActive] = useState(false);
-  const [debatePartner, setDebatePartner] = useState(null); // history item chosen for debate
+  const [debatePartner, setDebatePartner] = useState(null);
   const [tapPos, setTapPos] = useState(null);
+  const [rippleKey, setRippleKey] = useState(0); // increment to re-trigger ripple
   const [scanHistory, setScanHistory] = useState([]);
+  const [markers, setMarkers] = useState([]); // spatial markers on camera view
   const [resumedMessages, setResumedMessages] = useState(null);
-  // Whether to show the debate prompt (new scan + history exists)
   const [showDebatePrompt, setShowDebatePrompt] = useState(false);
 
   const { isProcessing, error, identifyObject, startConversation, sendMessage, transcribeAudio } = useGemini();
@@ -64,23 +68,21 @@ function App() {
     const result = await identifyObject(imageSrc);
     if (result) {
       setVisionData(result);
-      // If history has items, show debate prompt instead of going straight to ObjectCard
-      if (scanHistory.length > 0) {
-        setShowDebatePrompt(true);
-      }
+      if (scanHistory.length > 0) setShowDebatePrompt(true);
     }
   };
 
   const handleScreenTap = (e) => {
     if (isProcessing || visionData || chatActive || debateActive) return;
-    setTapPos({ x: e.clientX, y: e.clientY });
+    const pos = { x: e.clientX, y: e.clientY };
+    setTapPos(pos);
+    setRippleKey(k => k + 1); // re-trigger ripple
     if (window.captureFrame) {
       const imgData = window.captureFrame();
       handleScan(imgData);
     }
   };
 
-  // User chose "Talk alone" from the debate prompt
   const handleTalkAlone = async () => {
     setShowDebatePrompt(false);
     setChatActive(true);
@@ -93,7 +95,6 @@ function App() {
     );
   };
 
-  // User chose "Connect" from the debate prompt
   const handleStartDebate = (partner) => {
     setShowDebatePrompt(false);
     setDebatePartner(partner);
@@ -113,7 +114,7 @@ function App() {
   };
 
   const handleCloseChat = (savedMessages) => {
-    if (visionData) {
+    if (visionData && tapPos) {
       const entry = {
         object_type: visionData.object_type,
         personality_summary: visionData.personality_summary,
@@ -122,9 +123,15 @@ function App() {
         vocal_direction: visionData.vocal_direction,
         messages: savedMessages || [],
       };
+      // Save to history
       setScanHistory(prev => {
         const filtered = prev.filter(h => h.object_type !== entry.object_type);
         return [entry, ...filtered].slice(0, MAX_HISTORY);
+      });
+      // Save spatial marker at tap position
+      setMarkers(prev => {
+        const filtered = prev.filter(m => m.object_type !== entry.object_type);
+        return [{ ...entry, x: tapPos.x, y: tapPos.y }, ...filtered].slice(0, MAX_MARKERS);
       });
     }
     setChatActive(false);
@@ -134,7 +141,6 @@ function App() {
   };
 
   const handleCloseDebate = (debateEntry) => {
-    // Save debate as a history entry
     if (debateEntry) {
       setScanHistory(prev => [debateEntry, ...prev].slice(0, MAX_HISTORY));
     }
@@ -144,8 +150,30 @@ function App() {
     setTapPos(null);
   };
 
+  // Resume from spatial marker tap
+  const handleMarkerTap = async (marker) => {
+    if (chatActive || debateActive || isProcessing) return;
+    const resumedVisionData = {
+      object_type: marker.object_type,
+      personality_summary: marker.personality_summary,
+      opening_line: marker.opening_line,
+      voice: marker.voice,
+      vocal_direction: marker.vocal_direction,
+    };
+    setTapPos({ x: marker.x, y: marker.y });
+    setVisionData(resumedVisionData);
+    setResumedMessages(marker.messages);
+    setChatActive(true);
+    await startConversation(
+      marker.object_type,
+      marker.personality_summary,
+      marker.voice,
+      marker.vocal_direction
+    );
+  };
+
   const handleResume = async (historyItem) => {
-    if (historyItem.isDebate) return; // debate entries are read-only for now
+    if (historyItem.isDebate) return;
     const resumedVisionData = {
       object_type: historyItem.object_type,
       personality_summary: historyItem.personality_summary,
@@ -176,8 +204,23 @@ function App() {
       )}
 
       <AROverlay isSupported={isWebXRSupported}>
+
+        {/* Tap ripple — triggers on each new scan */}
+        <TapRipple key={rippleKey} x={tapPos?.x ?? null} y={tapPos?.y ?? null} />
+
+        {/* Spatial markers — always visible when idle */}
+        {isIdle && (
+          <SpatialMarkers markers={markers} onTap={handleMarkerTap} />
+        )}
+
+        {/* Bounding box with recognition beat */}
         {(isProcessing || visionData || chatActive || debateActive) && (
-          <BoundingBox x={tapPos?.x ?? null} y={tapPos?.y ?? null} isScanning={isProcessing} />
+          <BoundingBox
+            x={tapPos?.x ?? null}
+            y={tapPos?.y ?? null}
+            isScanning={isProcessing}
+            objectType={visionData?.object_type}
+          />
         )}
 
         <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-6">
@@ -208,7 +251,6 @@ function App() {
               </div>
             )}
 
-            {/* Debate prompt — shown after scan when history exists */}
             {visionData && !isProcessing && !chatActive && !debateActive && showDebatePrompt && (
               <DebatePrompt
                 newObject={visionData}
@@ -218,7 +260,6 @@ function App() {
               />
             )}
 
-            {/* Normal object card — shown when no debate prompt */}
             {visionData && !isProcessing && !chatActive && !debateActive && !showDebatePrompt && (
               <ObjectCard
                 visionData={visionData}
