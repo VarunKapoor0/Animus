@@ -7,16 +7,22 @@ import ChatPanel from './components/ChatPanel';
 import AROverlay from './components/AROverlay';
 import BoundingBox from './components/BoundingBox';
 import LandingPage from './components/LandingPage';
+import ScanHistory from './components/ScanHistory';
 import useGemini from './hooks/useGemini';
+
+const MAX_HISTORY = 5;
 
 function App() {
   const [landed, setLanded] = useState(false);
   const [visionData, setVisionData] = useState(null);
   const [chatActive, setChatActive] = useState(false);
   const [tapPos, setTapPos] = useState(null);
-  
+  const [scanHistory, setScanHistory] = useState([]);
+  // When resuming from history, store saved conversation messages
+  const [resumedMessages, setResumedMessages] = useState(null);
+
   const { isProcessing, error, identifyObject, startConversation, sendMessage, transcribeAudio } = useGemini();
-  
+
   const isWebXRSupported = 'xr' in navigator;
 
   useEffect(() => {
@@ -27,6 +33,7 @@ function App() {
         setVisionData(null);
         setChatActive(false);
         setTapPos(null);
+        setResumedMessages(null);
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -38,12 +45,11 @@ function App() {
     setLanded(true);
   };
 
-  if (!landed) {
-    return <LandingPage onEnter={handleEnter} />;
-  }
-  
+  if (!landed) return <LandingPage onEnter={handleEnter} />;
+
   const handleScan = async (imageSrc) => {
     setChatActive(false);
+    setResumedMessages(null);
     if (!imageSrc) return;
     const result = await identifyObject(imageSrc);
     if (result) setVisionData(result);
@@ -61,7 +67,7 @@ function App() {
   const handleStartChat = async () => {
     if (!visionData) return;
     setChatActive(true);
-    // Pass voice and vocal_direction from Gemini vision response
+    setResumedMessages(null);
     await startConversation(
       visionData.object_type,
       visionData.personality_summary,
@@ -70,10 +76,48 @@ function App() {
     );
   };
 
-  const handleCloseChat = () => {
+  // Save conversation to history, then close
+  const handleCloseChat = (savedMessages) => {
+    if (visionData) {
+      const entry = {
+        object_type: visionData.object_type,
+        personality_summary: visionData.personality_summary,
+        opening_line: visionData.opening_line,
+        voice: visionData.voice,
+        vocal_direction: visionData.vocal_direction,
+        messages: savedMessages || [],
+      };
+      setScanHistory(prev => {
+        // Remove duplicate if same object was linked before
+        const filtered = prev.filter(h => h.object_type !== entry.object_type);
+        return [entry, ...filtered].slice(0, MAX_HISTORY);
+      });
+    }
     setChatActive(false);
     setVisionData(null);
     setTapPos(null);
+    setResumedMessages(null);
+  };
+
+  // Resume a previous conversation — no API call needed
+  const handleResume = async (historyItem) => {
+    const resumedVisionData = {
+      object_type: historyItem.object_type,
+      personality_summary: historyItem.personality_summary,
+      opening_line: historyItem.opening_line,
+      voice: historyItem.voice,
+      vocal_direction: historyItem.vocal_direction,
+    };
+    setVisionData(resumedVisionData);
+    setResumedMessages(historyItem.messages);
+    setChatActive(true);
+    setTapPos(null);
+    await startConversation(
+      historyItem.object_type,
+      historyItem.personality_summary,
+      historyItem.voice,
+      historyItem.vocal_direction
+    );
   };
 
   return (
@@ -81,19 +125,18 @@ function App() {
       <Camera />
 
       {!isProcessing && !visionData && !chatActive && (
-        <div 
-          className="absolute inset-0 z-10 pointer-events-auto cursor-crosshair" 
+        <div
+          className="absolute inset-0 z-10 pointer-events-auto cursor-crosshair"
           onClick={handleScreenTap}
         />
       )}
 
       <AROverlay isSupported={isWebXRSupported}>
-        
         {(isProcessing || visionData || chatActive) && (
-          <BoundingBox 
-            x={tapPos?.x ?? null} 
-            y={tapPos?.y ?? null} 
-            isScanning={isProcessing} 
+          <BoundingBox
+            x={tapPos?.x ?? null}
+            y={tapPos?.y ?? null}
+            isScanning={isProcessing}
           />
         )}
 
@@ -114,38 +157,42 @@ function App() {
           <div className="flex-1 flex items-center justify-center relative pointer-events-none">
             {isProcessing && (
               <div className="panel-bg neon-border-cyan p-4 flex flex-col items-center animate-[flicker_0.3s_ease-in]">
-                 <GlitchText text="ANALYZING..." className="text-neon-cyan font-mono text-lg" glitchSpeed="fast" />
-                 <div className="w-full h-1 bg-gray-800 mt-2 rounded">
-                   <div className="h-full bg-neon-cyan animate-pulse rounded"></div>
-                 </div>
+                <GlitchText text="ANALYZING..." className="text-neon-cyan font-mono text-lg" glitchSpeed="fast" />
+                <div className="w-full h-1 bg-gray-800 mt-2 rounded">
+                  <div className="h-full bg-neon-cyan animate-pulse rounded"></div>
+                </div>
               </div>
             )}
-            
+
             {visionData && !isProcessing && !chatActive && (
-              <ObjectCard 
-                visionData={visionData} 
-                onClose={() => { setVisionData(null); setTapPos(null); }} 
-                onChatStart={handleStartChat} 
+              <ObjectCard
+                visionData={visionData}
+                onClose={() => { setVisionData(null); setTapPos(null); }}
+                onChatStart={handleStartChat}
               />
             )}
 
             {chatActive && (
-              <ChatPanel 
+              <ChatPanel
                 visionData={visionData}
                 sendMessage={sendMessage}
                 transcribeAudio={transcribeAudio}
+                initialMessages={resumedMessages}
                 onClose={handleCloseChat}
               />
             )}
           </div>
 
-          <div className="pb-8 flex justify-center pointer-events-auto">
-             {!isProcessing && !visionData && !chatActive && (
-               <ScanButton 
-                 onScan={(img) => { setTapPos(null); handleScan(img); }} 
-                 isScanning={isProcessing} 
-               />
-             )}
+          <div className="pb-8 flex flex-col items-center gap-4 pointer-events-auto">
+            {!isProcessing && !visionData && !chatActive && (
+              <>
+                <ScanHistory history={scanHistory} onResume={handleResume} />
+                <ScanButton
+                  onScan={(img) => { setTapPos(null); handleScan(img); }}
+                  isScanning={isProcessing}
+                />
+              </>
+            )}
           </div>
         </div>
       </AROverlay>
