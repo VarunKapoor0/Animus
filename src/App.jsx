@@ -6,9 +6,11 @@ import ObjectCard from './components/ObjectCard';
 import ChatPanel from './components/ChatPanel';
 import AROverlay from './components/AROverlay';
 import BoundingBox from './components/BoundingBox';
+import LandingPage from './components/LandingPage';
 import useGemini from './hooks/useGemini';
 
 function App() {
+  const [landed, setLanded] = useState(false); // false = show landing, true = show app
   const [visionData, setVisionData] = useState(null);
   const [chatActive, setChatActive] = useState(false);
   const [tapPos, setTapPos] = useState(null);
@@ -16,6 +18,11 @@ function App() {
   const { isProcessing, error, identifyObject, startConversation, sendMessage, transcribeAudio } = useGemini();
   
   const isWebXRSupported = 'xr' in navigator;
+
+  // Show landing page until user clicks INITIATE
+  if (!landed) {
+    return <LandingPage onEnter={() => setLanded(true)} />;
+  }
   
   const handleScan = async (imageSrc) => {
     setChatActive(false);
