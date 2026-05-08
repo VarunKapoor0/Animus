@@ -1,4 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+// App.jsx — lean layout and routing shell.
+// All domain state and handlers live in useAnimusState.
+
+import { useEffect } from 'react';
 import Camera from './components/Camera';
 import ScanButton from './components/ScanButton';
 import GlitchText from './components/GlitchText';
@@ -12,60 +15,51 @@ import TapRipple from './components/TapRipple';
 import SpatialMarkers from './components/SpatialMarkers';
 import LandingPage from './components/LandingPage';
 import ScanHistory from './components/ScanHistory';
-import useGemini from './hooks/useGemini';
-import useWebXR from './hooks/useWebXR';
-
-const MAX_HISTORY = 5;
-const MAX_MARKERS = 8;
-const centerPos = () => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+import useAnimusState from './hooks/useAnimusState';
+import { useState } from 'react';
 
 function App() {
   const [landed, setLanded] = useState(false);
-  const [visionData, setVisionData] = useState(null);
-  const [chatActive, setChatActive] = useState(false);
-  const [debateActive, setDebateActive] = useState(false);
-  const [debatePartner, setDebatePartner] = useState(null);
-  const [tapPos, setTapPos] = useState(null);
-  const [tapWorldPos, setTapWorldPos] = useState(null);
-  const [rippleTrigger, setRippleTrigger] = useState(0);
-  const [ripplePos, setRipplePos] = useState({ x: null, y: null });
-  const [scanHistory, setScanHistory] = useState([]);
-  const [markers, setMarkers] = useState([]);
-  const [resumedMessages, setResumedMessages] = useState(null);
-  const [showDebatePrompt, setShowDebatePrompt] = useState(false);
-  // Track whether the scan came from a real screen tap or the scan button
-  const tapFromScreen = useRef(false);
 
-  const { isProcessing, error, identifyObject, startConversation, sendMessage, transcribeAudio } = useGemini();
   const {
-    containerRef,
-    arSupported,
-    isARActive,
-    markerScreenPositions,
-    startAR,
-    captureHitPosition,
-    addARMarker,
-  } = useWebXR();
+    visionData, setVisionData,
+    chatActive,
+    debateActive,
+    debatePartner,
+    tapPos, setTapPos,
+    rippleTrigger,
+    ripplePos,
+    scanHistory,
+    markers,
+    resumedMessages,
+    showDebatePrompt,
+    isIdle,
+    isProcessing, error,
+    sendMessage, transcribeAudio,
+    containerRef, isARActive, markerScreenPositions,
+    resetToIdle,
+    handleScreenTap,
+    handleScanButton,
+    handleTalkAlone,
+    handleStartDebate,
+    handleStartChat,
+    handleCloseChat,
+    handleCloseDebate,
+    handleMarkerTap,
+    handleResume,
+  } = useAnimusState();
 
   useEffect(() => {
     window.history.replaceState({ page: 'landing' }, '');
     const handlePopState = (e) => {
       if (!e.state || e.state.page === 'landing') {
         setLanded(false);
-        setVisionData(null);
-        setChatActive(false);
-        setDebateActive(false);
-        setDebatePartner(null);
-        setTapPos(null);
-        setTapWorldPos(null);
-        setResumedMessages(null);
-        setShowDebatePrompt(false);
-        tapFromScreen.current = false;
+        resetToIdle();
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [resetToIdle]);
 
   const handleEnter = () => {
     window.history.pushState({ page: 'app' }, '');
@@ -73,150 +67,6 @@ function App() {
   };
 
   if (!landed) return <LandingPage onEnter={handleEnter} />;
-
-  const handleScan = async (imageSrc) => {
-    setChatActive(false);
-    setDebateActive(false);
-    setDebatePartner(null);
-    setResumedMessages(null);
-    setShowDebatePrompt(false);
-    if (!imageSrc) return;
-
-    if (arSupported && !isARActive) startAR();
-
-    const worldPos = isARActive ? captureHitPosition() : null;
-    setTapWorldPos(worldPos);
-
-    const result = await identifyObject(imageSrc);
-    if (result) {
-      setVisionData(result);
-      if (scanHistory.length > 0) setShowDebatePrompt(true);
-    }
-  };
-
-  const handleScreenTap = (e) => {
-    if (isProcessing || visionData || chatActive || debateActive) return;
-    const pos = { x: e.clientX, y: e.clientY };
-    tapFromScreen.current = true; // real tap — save spatial marker
-    setTapPos(pos);
-    setRipplePos(pos);
-    setRippleTrigger(k => k + 1);
-    if (window.captureFrame) handleScan(window.captureFrame());
-  };
-
-  const handleScanButton = (img) => {
-    tapFromScreen.current = false; // scan button — no spatial marker, just history
-    const pos = centerPos();
-    setTapPos(pos);
-    setRipplePos(pos);
-    setRippleTrigger(k => k + 1);
-    handleScan(img);
-  };
-
-  const handleTalkAlone = async () => {
-    setShowDebatePrompt(false);
-    setChatActive(true);
-    setResumedMessages(null);
-    await startConversation(visionData.object_type, visionData.personality_summary, visionData.voice, visionData.vocal_direction);
-  };
-
-  const handleStartDebate = (partner) => {
-    setShowDebatePrompt(false);
-    setDebatePartner(partner);
-    setDebateActive(true);
-  };
-
-  const handleStartChat = async () => {
-    if (!visionData) return;
-    setChatActive(true);
-    setResumedMessages(null);
-    await startConversation(visionData.object_type, visionData.personality_summary, visionData.voice, visionData.vocal_direction);
-  };
-
-  const handleCloseChat = (savedMessages) => {
-    if (visionData) {
-      const entry = {
-        object_type: visionData.object_type,
-        personality_summary: visionData.personality_summary,
-        opening_line: visionData.opening_line,
-        voice: visionData.voice,
-        vocal_direction: visionData.vocal_direction,
-        messages: savedMessages || [],
-        worldPos: tapWorldPos || null,
-      };
-
-      // Always save to history strip
-      setScanHistory(prev => {
-        const filtered = prev.filter(h => h.object_type !== entry.object_type);
-        return [entry, ...filtered].slice(0, MAX_HISTORY);
-      });
-
-      // Only save spatial marker if scan came from a real screen tap
-      if (tapFromScreen.current && tapPos) {
-        setMarkers(prev => {
-          const filtered = prev.filter(m => m.object_type !== entry.object_type);
-          return [{ ...entry, x: tapPos.x, y: tapPos.y }, ...filtered].slice(0, MAX_MARKERS);
-        });
-      }
-
-      // Place AR marker if in AR mode with a real world position
-      if (isARActive && tapWorldPos) {
-        addARMarker(visionData.object_type, tapWorldPos);
-      }
-    }
-    setChatActive(false);
-    setVisionData(null);
-    setTapPos(null);
-    setTapWorldPos(null);
-    setResumedMessages(null);
-    tapFromScreen.current = false;
-  };
-
-  const handleCloseDebate = (debateEntry) => {
-    if (debateEntry) setScanHistory(prev => [debateEntry, ...prev].slice(0, MAX_HISTORY));
-    setDebateActive(false);
-    setDebatePartner(null);
-    setVisionData(null);
-    setTapPos(null);
-    setTapWorldPos(null);
-    tapFromScreen.current = false;
-  };
-
-  const handleMarkerTap = async (marker) => {
-    if (chatActive || debateActive || isProcessing) return;
-    if (marker.worldPos && isARActive) setTapWorldPos(marker.worldPos);
-    setTapPos({ x: marker.x, y: marker.y });
-    tapFromScreen.current = true;
-    setVisionData({
-      object_type: marker.object_type,
-      personality_summary: marker.personality_summary,
-      opening_line: marker.opening_line,
-      voice: marker.voice,
-      vocal_direction: marker.vocal_direction,
-    });
-    setResumedMessages(marker.messages);
-    setChatActive(true);
-    await startConversation(marker.object_type, marker.personality_summary, marker.voice, marker.vocal_direction);
-  };
-
-  const handleResume = async (historyItem) => {
-    if (historyItem.isDebate) return;
-    tapFromScreen.current = false;
-    setVisionData({
-      object_type: historyItem.object_type,
-      personality_summary: historyItem.personality_summary,
-      opening_line: historyItem.opening_line,
-      voice: historyItem.voice,
-      vocal_direction: historyItem.vocal_direction,
-    });
-    setResumedMessages(historyItem.messages);
-    setChatActive(true);
-    setTapPos(null);
-    setTapWorldPos(null);
-    await startConversation(historyItem.object_type, historyItem.personality_summary, historyItem.voice, historyItem.vocal_direction);
-  };
-
-  const isIdle = !isProcessing && !visionData && !chatActive && !debateActive;
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-sans scanlines">

@@ -1,13 +1,13 @@
 // Dual-object conversation panel.
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import useAudio from '../hooks/useAudio';
+import useRecording from '../hooks/useRecording';
 
 export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose }) {
   const [messages, setMessages] = useState([]);
   const [turnState, setTurnState] = useState('idle');
   const [currentSpeaker, setCurrentSpeaker] = useState('A');
   const [userInput, setUserInput] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
 
   const historyA = useRef([]);
   const historyB = useRef([]);
@@ -15,31 +15,15 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
   const lastSaidB = useRef(null);
   const pendingInterject = useRef(null);
   const endRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const currentAudioRef = useRef(null);
   const messagesRef = useRef([]);
+  const isMounted = useRef(true);
+
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, turnState]);
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, turnState]);
+  const { speakReply, stopAudio } = useAudio(isMounted);
 
-  useEffect(() => {
-    speakTurn('A');
-    return () => stopAudio();
-  }, []);
-
-  const stopAudio = () => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current.src = '';
-      currentAudioRef.current = null;
-    }
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-  };
-
-  const speakTurn = async (speaker) => {
+  const speakTurn = useCallback(async (speaker) => {
     setTurnState('speaking');
     const isA = speaker === 'A';
     const self = isA ? objectA : objectB;
@@ -75,6 +59,7 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
       if (!response.ok) throw new Error('Debate API error');
       const data = await response.json();
       const text = data.text;
+
       selfHistory.current = [
         ...selfHistory.current,
         { role: 'user', parts: [{ text: userMsg }] },
@@ -82,36 +67,24 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
       ];
       if (isA) lastSaidA.current = text;
       else lastSaidB.current = text;
+
       setMessages(prev => [...prev, { speaker, object_type: self.object_type, text }]);
-      await playTTS(text, self.voice, self.vocal_direction);
+      await speakReply(text, 'english', self.voice || 'diana', self.vocal_direction);
       setCurrentSpeaker(isA ? 'B' : 'A');
       setTurnState('paused');
     } catch (err) {
       console.error('Debate turn error:', err);
       setTurnState('error');
     }
-  };
+  }, [objectA, objectB, speakReply]);
 
-  const playTTS = async (text, voice, vocalDirection) => {
-    stopAudio();
-    try {
-      const response = await fetch('/api/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: voice || 'diana', vocal_direction: vocalDirection })
-      });
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        currentAudioRef.current = audio;
-        audio.onended = () => URL.revokeObjectURL(url);
-        await audio.play();
-      }
-    } catch (err) { console.warn('TTS failed:', err); }
-  };
+  useEffect(() => {
+    isMounted.current = true;
+    speakTurn('A');
+    return () => { isMounted.current = false; stopAudio(); };
+  }, []);
 
-  const handleContinue = () => {
+  const handleContinue = useCallback(() => {
     const interject = userInput.trim() || null;
     if (interject) {
       setMessages(prev => [...prev, { speaker: 'USER', object_type: 'YOU', text: interject }]);
@@ -119,9 +92,9 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
     }
     setUserInput('');
     speakTurn(currentSpeaker);
-  };
+  }, [userInput, currentSpeaker, speakTurn]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     stopAudio();
     onClose({
       object_type: `${objectA.object_type} × ${objectB.object_type}`,
@@ -135,35 +108,12 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
       })),
       isDebate: true,
     });
-  };
+  }, [objectA, objectB, stopAudio, onClose]);
 
-  const startRecording = async () => {
-    if (turnState === 'speaking' || isTranscribing) return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunksRef.current = [];
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setIsTranscribing(true);
-        const transcript = await transcribeAudio(blob);
-        setIsTranscribing(false);
-        if (transcript) setUserInput(transcript.trim());
-      };
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch (err) { console.error('Mic error:', err); }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  };
+  const { isRecording, isTranscribing, startRecording, stopRecording } = useRecording(
+    transcribeAudio,
+    (transcript) => setUserInput(transcript)
+  );
 
   const colorA = 'text-neon-magenta';
   const colorB = 'text-neon-cyan';
@@ -177,7 +127,6 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
         className="pointer-events-auto w-full max-w-2xl mx-auto my-2 sm:my-6 md:my-10 panel-bg border border-neon-cyan/50 flex flex-col shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden"
         style={{ maxHeight: 'calc(100dvh - 16px)' }}
       >
-        {/* Header */}
         <div className="flex-none bg-neon-cyan/10 border-b border-neon-cyan/30 px-3 py-2 flex items-center gap-2 min-w-0">
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse flex-none" />
@@ -193,7 +142,6 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
           </button>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-3 space-y-3 font-mono text-sm">
           {messages.map((msg, i) => {
             const isUser = msg.speaker === 'USER';
@@ -234,7 +182,6 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
           <div ref={endRef} />
         </div>
 
-        {/* Controls — always anchored to bottom */}
         {turnState === 'paused' && (
           <div className="flex-none p-2 bg-black/60 border-t border-neon-cyan/20 space-y-2">
             <div className="flex gap-2">

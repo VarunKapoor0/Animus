@@ -1,17 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
-
-const LANG_TO_BCP47 = {
-  'hindi': 'hi-IN', 'spanish': 'es-ES', 'french': 'fr-FR',
-  'german': 'de-DE', 'italian': 'it-IT', 'portuguese': 'pt-BR',
-  'japanese': 'ja-JP', 'korean': 'ko-KR', 'chinese': 'zh-CN',
-  'arabic': 'ar-SA', 'russian': 'ru-RU', 'dutch': 'nl-NL',
-  'polish': 'pl-PL', 'turkish': 'tr-TR', 'swedish': 'sv-SE',
-};
-
-function toBCP47(language) {
-  if (!language) return null;
-  return LANG_TO_BCP47[language.toLowerCase()] || language;
-}
+import { useState, useRef, useEffect, useCallback } from 'react';
+import useAudio from '../hooks/useAudio';
+import useRecording from '../hooks/useRecording';
 
 export default function ChatPanel({ visionData, sendMessage, transcribeAudio, initialMessages, onClose }) {
   const defaultMessages = [{ role: 'assistant', text: visionData.opening_line }];
@@ -20,12 +9,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
   );
   const [inputVal, setInputVal] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
   const endOfChatRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const currentAudioRef = useRef(null);
   const messagesRef = useRef(messages);
   const isMounted = useRef(true);
 
@@ -34,29 +18,9 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
   const voice = visionData.voice || 'diana';
   const vocalDirection = visionData.vocal_direction || null;
 
-  useEffect(() => {
-    endOfChatRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isTyping]);
+  const { speakReply, stopAudio } = useAudio(isMounted);
 
-  useEffect(() => {
-    isMounted.current = true;
-    const isResuming = initialMessages && initialMessages.length > 0;
-    if (!isResuming && visionData.opening_line) speakReply(visionData.opening_line, 'english');
-    return () => { isMounted.current = false; stopAudio(); };
-  }, []);
-
-  const stopAudio = () => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current.src = '';
-      currentAudioRef.current = null;
-    }
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-  };
-
-  const handleClose = () => { stopAudio(); onClose(messagesRef.current); };
-
-  const handleSend = async (messageText) => {
+  const handleSend = useCallback(async (messageText) => {
     const text = messageText || inputVal;
     if (!text.trim() || isTyping) return;
     setMessages(prev => [...prev, { role: 'user', text }]);
@@ -68,77 +32,34 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
       const replyText = result.text || result;
       const replyLang = result.language || 'english';
       setMessages(prev => [...prev, { role: 'assistant', text: replyText }]);
-      speakReply(replyText, replyLang);
+      speakReply(replyText, replyLang, voice, vocalDirection);
     } else {
       setMessages(prev => [...prev, { role: 'assistant', text: '[CONNECTION LOST... UNABLE TO RESPOND]' }]);
     }
     setIsTyping(false);
-  };
+  }, [inputVal, isTyping, sendMessage, speakReply, voice, vocalDirection]);
 
-  const speakReply = async (text, language = 'english') => {
-    stopAudio();
-    const isEnglish = !language || language === 'english' || language === 'en';
-    if (isEnglish) {
-      try {
-        const response = await fetch('/api/speak', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, voice, vocal_direction: vocalDirection })
-        });
-        if (!isMounted.current) return;
-        if (response.ok) {
-          const audioBlob = await response.blob();
-          if (!isMounted.current) return;
-          const audioUrl = URL.createObjectURL(audioBlob);
-          const audio = new Audio(audioUrl);
-          currentAudioRef.current = audio;
-          audio.onended = () => URL.revokeObjectURL(audioUrl);
-          audio.play();
-          return;
-        }
-      } catch (err) { console.warn('Groq TTS failed:', err); }
-    }
-    if (!isMounted.current) return;
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.9;
-      utterance.pitch = 1.0;
-      const langTag = isEnglish ? 'en-US' : toBCP47(language);
-      if (langTag) utterance.lang = langTag;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
+  const { isRecording, isTranscribing, startRecording, stopRecording } = useRecording(
+    transcribeAudio,
+    (transcript) => handleSend(transcript)
+  );
 
-  const startRecording = async () => {
-    if (isTyping || isTranscribing) return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunksRef.current = [];
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setIsTranscribing(true);
-        const transcript = await transcribeAudio(audioBlob);
-        setIsTranscribing(false);
-        if (transcript && transcript.trim()) handleSend(transcript.trim());
-      };
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch (err) { console.error('Mic error:', err); }
-  };
+  useEffect(() => {
+    endOfChatRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
+  useEffect(() => {
+    isMounted.current = true;
+    const isResuming = initialMessages && initialMessages.length > 0;
+    if (!isResuming && visionData.opening_line) {
+      speakReply(visionData.opening_line, 'english', voice, vocalDirection);
     }
-  };
+    return () => { isMounted.current = false; stopAudio(); };
+  }, []);
+
+  const handleClose = () => { stopAudio(); onClose(messagesRef.current); };
 
   return (
-    // Use fixed positioning with dvh so keyboard doesn't push content off screen
     <div
       className="fixed inset-x-0 bottom-0 top-0 flex items-stretch justify-center pointer-events-none"
       style={{ zIndex: 30 }}
@@ -147,7 +68,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
         className="pointer-events-auto w-full max-w-2xl mx-auto my-2 sm:my-6 md:my-10 panel-bg border border-neon-cyan/50 flex flex-col shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden"
         style={{ maxHeight: 'calc(100dvh - 16px)' }}
       >
-        {/* Header — always visible, never squeezed */}
         <div className="flex-none bg-neon-cyan/10 border-b border-neon-cyan/30 px-3 py-2 flex items-center gap-2">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse flex-none" />
@@ -163,7 +83,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
           </button>
         </div>
 
-        {/* Messages — scrollable middle section */}
         <div className="flex-1 overflow-y-auto p-3 space-y-3 font-mono text-sm">
           {messages.map((msg, i) => (
             <div key={i} className={`max-w-[88%] ${msg.role === 'user' ? 'ml-auto text-right' : 'mr-auto text-left'}`}>
@@ -195,7 +114,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
           <div ref={endOfChatRef} />
         </div>
 
-        {/* Input — always anchored to bottom, never hidden */}
         <div className="flex-none p-2 bg-black/60 border-t border-neon-cyan/20 space-y-2">
           <button
             type="button"
