@@ -2,81 +2,10 @@
 // Uses Canvas API to render the card client-side.
 // Falls back gracefully across mobile/desktop.
 
-export async function generateShareCard(objectType, openingLine) {
-  const W = 1080;
-  const H = 1080;
-  const canvas = document.createElement('canvas');
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext('2d');
-
-  // Background
-  ctx.fillStyle = '#080b14';
-  ctx.fillRect(0, 0, W, H);
-
-  // Scanlines
-  ctx.fillStyle = 'rgba(0, 245, 255, 0.025)';
-  for (let y = 0; y < H; y += 4) {
-    ctx.fillRect(0, y, W, 1);
-  }
-
-  // Subtle radial glow
-  const glow = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.6);
-  glow.addColorStop(0, 'rgba(0, 245, 255, 0.06)');
-  glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, W, H);
-
-  // Corner brackets
-  const bracketSize = 60;
-  const bracketOffset = 48;
-  const bracketColor = 'rgba(0, 245, 255, 0.5)';
-  ctx.strokeStyle = bracketColor;
-  ctx.lineWidth = 3;
-  // Top left
-  ctx.beginPath(); ctx.moveTo(bracketOffset, bracketOffset + bracketSize); ctx.lineTo(bracketOffset, bracketOffset); ctx.lineTo(bracketOffset + bracketSize, bracketOffset); ctx.stroke();
-  // Top right
-  ctx.beginPath(); ctx.moveTo(W - bracketOffset - bracketSize, bracketOffset); ctx.lineTo(W - bracketOffset, bracketOffset); ctx.lineTo(W - bracketOffset, bracketOffset + bracketSize); ctx.stroke();
-  // Bottom left
-  ctx.beginPath(); ctx.moveTo(bracketOffset, H - bracketOffset - bracketSize); ctx.lineTo(bracketOffset, H - bracketOffset); ctx.lineTo(bracketOffset + bracketSize, H - bracketOffset); ctx.stroke();
-  // Bottom right
-  ctx.beginPath(); ctx.moveTo(W - bracketOffset - bracketSize, H - bracketOffset); ctx.lineTo(W - bracketOffset, H - bracketOffset); ctx.lineTo(W - bracketOffset, H - bracketOffset - bracketSize); ctx.stroke();
-
-  // Object type label
-  ctx.font = 'bold 28px monospace';
-  ctx.fillStyle = '#00f5ff';
-  ctx.letterSpacing = '6px';
-  ctx.textAlign = 'center';
-  const labelText = objectType.toUpperCase();
-  // Label background pill
-  const labelMetrics = ctx.measureText(labelText);
-  const labelW = labelMetrics.width + 48;
-  const labelH = 50;
-  const labelX = W / 2 - labelW / 2;
-  const labelY = H / 2 - 160;
-  ctx.fillStyle = 'rgba(0, 245, 255, 0.08)';
-  ctx.fillRect(labelX, labelY, labelW, labelH);
-  ctx.strokeStyle = 'rgba(0, 245, 255, 0.3)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(labelX, labelY, labelW, labelH);
-  ctx.fillStyle = '#00f5ff';
-  ctx.fillText(labelText, W / 2, labelY + 33);
-
-  // Opening line — word wrapped serif italic
-  ctx.font = 'italic 42px Georgia, serif';
-  ctx.fillStyle = '#e8eaf0';
-  ctx.textAlign = 'center';
-  ctx.shadowColor = 'rgba(255, 45, 120, 0.3)';
-  ctx.shadowBlur = 8;
-  ctx.shadowOffsetX = 2;
-
-  const quote = `"${openingLine}"`;
-  const maxWidth = W - 160;
-  const lineHeight = 58;
-  const words = quote.split(' ');
+function wrapText(ctx, text, maxWidth) {
+  const words = text.split(' ');
   const lines = [];
   let currentLine = '';
-
   for (const word of words) {
     const testLine = currentLine ? `${currentLine} ${word}` : word;
     if (ctx.measureText(testLine).width > maxWidth && currentLine) {
@@ -87,9 +16,105 @@ export async function generateShareCard(objectType, openingLine) {
     }
   }
   if (currentLine) lines.push(currentLine);
+  return lines;
+}
 
-  const totalTextHeight = lines.length * lineHeight;
-  let textY = H / 2 - totalTextHeight / 2 + 20;
+export async function generateShareCard(objectType, openingLine) {
+  const W = 1080;
+  const H = 1080;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // ── Background ──────────────────────────────────────────
+  ctx.fillStyle = '#080b14';
+  ctx.fillRect(0, 0, W, H);
+
+  // Scanlines
+  ctx.fillStyle = 'rgba(0, 245, 255, 0.02)';
+  for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
+
+  // Radial glow
+  const glow = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.6);
+  glow.addColorStop(0, 'rgba(0, 245, 255, 0.05)');
+  glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Corner brackets ──────────────────────────────────────
+  const bSize = 60;
+  const bOff = 48;
+  ctx.strokeStyle = 'rgba(0, 245, 255, 0.45)';
+  ctx.lineWidth = 3;
+  const corners = [
+    [[bOff, bOff + bSize], [bOff, bOff], [bOff + bSize, bOff]],
+    [[W - bOff - bSize, bOff], [W - bOff, bOff], [W - bOff, bOff + bSize]],
+    [[bOff, H - bOff - bSize], [bOff, H - bOff], [bOff + bSize, H - bOff]],
+    [[W - bOff - bSize, H - bOff], [W - bOff, H - bOff], [W - bOff, H - bOff - bSize]],
+  ];
+  for (const [[x1, y1], [x2, y2], [x3, y3]] of corners) {
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3); ctx.stroke();
+  }
+
+  // ── Layout zones ─────────────────────────────────────────
+  // Top zone:    y 160–260  → object label
+  // Middle zone: y 280–800  → quote (grows downward, capped)
+  // Bottom zone: y 860–980  → branding
+  const LABEL_Y = 200;
+  const QUOTE_START_Y = 300;
+  const QUOTE_MAX_BOTTOM = 800;
+  const BRAND_Y = 900;
+
+  // ── Object type label ─────────────────────────────────────
+  ctx.font = 'bold 26px monospace';
+  ctx.textAlign = 'center';
+  const labelText = objectType.toUpperCase().slice(0, 30); // cap length
+  const labelMetrics = ctx.measureText(labelText);
+  const labelPadX = 32;
+  const labelPadY = 14;
+  const labelW = labelMetrics.width + labelPadX * 2;
+  const labelH = 44;
+  const labelX = W / 2 - labelW / 2;
+  const labelBoxY = LABEL_Y - labelH + 8;
+
+  ctx.fillStyle = 'rgba(0, 245, 255, 0.07)';
+  ctx.fillRect(labelX, labelBoxY, labelW, labelH);
+  ctx.strokeStyle = 'rgba(0, 245, 255, 0.28)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(labelX, labelBoxY, labelW, labelH);
+  ctx.fillStyle = '#00f5ff';
+  ctx.fillText(labelText, W / 2, LABEL_Y);
+
+  // ── Quote — compute lines first, then position ────────────
+  // Adjust font size if opening line is very long
+  const quote = `"${openingLine}"`;
+  const maxQuoteWidth = W - 160;
+  const lineHeight = 60;
+
+  let fontSize = 44;
+  ctx.font = `italic ${fontSize}px Georgia, serif`;
+  let lines = wrapText(ctx, quote, maxQuoteWidth);
+  const totalH = lines.length * lineHeight;
+
+  // If text overflows the middle zone, shrink font
+  while (totalH > QUOTE_MAX_BOTTOM - QUOTE_START_Y && fontSize > 28) {
+    fontSize -= 3;
+    ctx.font = `italic ${fontSize}px Georgia, serif`;
+    lines = wrapText(ctx, quote, maxQuoteWidth);
+  }
+
+  // Center the wrapped block vertically within the middle zone
+  const midZoneCenter = (QUOTE_START_Y + QUOTE_MAX_BOTTOM) / 2;
+  const recalcHeight = lines.length * lineHeight;
+  let textY = midZoneCenter - recalcHeight / 2 + lineHeight * 0.8;
+
+  ctx.fillStyle = '#e8eaf0';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = 'rgba(255, 45, 120, 0.25)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetX = 2;
+
   for (const line of lines) {
     ctx.fillText(line, W / 2, textY);
     textY += lineHeight;
@@ -99,25 +124,25 @@ export async function generateShareCard(objectType, openingLine) {
   ctx.shadowBlur = 0;
   ctx.shadowOffsetX = 0;
 
-  // Divider line
-  ctx.strokeStyle = 'rgba(0, 245, 255, 0.2)';
+  // ── Branding ──────────────────────────────────────────────
+  // Divider
+  ctx.strokeStyle = 'rgba(0, 245, 255, 0.18)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(W / 2 - 80, H - 160);
-  ctx.lineTo(W / 2 + 80, H - 160);
+  ctx.moveTo(W / 2 - 72, BRAND_Y - 32);
+  ctx.lineTo(W / 2 + 72, BRAND_Y - 32);
   ctx.stroke();
 
   // ANIMUS wordmark
-  ctx.font = 'bold 22px monospace';
-  ctx.fillStyle = 'rgba(0, 245, 255, 0.5)';
-  ctx.letterSpacing = '8px';
-  ctx.fillText('ANIMUS', W / 2, H - 128);
+  ctx.font = 'bold 20px monospace';
+  ctx.fillStyle = 'rgba(0, 245, 255, 0.55)';
+  ctx.textAlign = 'center';
+  ctx.fillText('A N I M U S', W / 2, BRAND_Y);
 
   // URL
-  ctx.font = '18px monospace';
-  ctx.fillStyle = 'rgba(255,255,255,0.2)';
-  ctx.letterSpacing = '2px';
-  ctx.fillText('animus-jade.vercel.app', W / 2, H - 96);
+  ctx.font = '16px monospace';
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillText('animus-jade.vercel.app', W / 2, BRAND_Y + 32);
 
   return canvas;
 }
@@ -127,9 +152,8 @@ export async function shareCard(objectType, openingLine) {
   const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
   const file = new File([blob], 'animus.png', { type: 'image/png' });
   const shareText = `"${openingLine}" — ${objectType} on Animus\n\nanimus-jade.vercel.app`;
-  const shareUrl = 'https://animus-jade.vercel.app';
 
-  // Try Web Share API (mobile)
+  // Try Web Share API with image (mobile)
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: 'Animus', text: shareText });
