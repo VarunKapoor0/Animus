@@ -9,15 +9,11 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
 
-  // Separate Gemini history per object — each object only sees its own turns
   const historyA = useRef([]);
   const historyB = useRef([]);
-  // Track the last thing each object said for cross-referencing
   const lastSaidA = useRef(null);
   const lastSaidB = useRef(null);
-  // Pending user interject — stored in ref so speakTurn always sees the latest value
   const pendingInterject = useRef(null);
-
   const endRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -51,17 +47,13 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
     const selfHistory = isA ? historyA : historyB;
     const lastOtherSaid = isA ? lastSaidB.current : lastSaidA.current;
     const interject = pendingInterject.current;
-    pendingInterject.current = null; // clear after reading
+    pendingInterject.current = null;
 
-    // Build the user message for Gemini
     let userMsg;
     if (!lastOtherSaid) {
-      // First turn — Object A opens
       userMsg = `You are starting a conversation with ${other.object_type}. Introduce yourself and say something provocative or interesting to get them talking.`;
     } else {
-      userMsg = `${other.object_type} just said: "${lastOtherSaid}".${
-        interject ? ` The human also says: "${interject}". Respond to both ${other.object_type} and the human.` : ''
-      } Respond directly to ${other.object_type}.`;
+      userMsg = `${other.object_type} just said: "${lastOtherSaid}".${interject ? ` The human also says: "${interject}". Respond to both ${other.object_type} and the human.` : ''} Respond directly to ${other.object_type}.`;
     }
 
     try {
@@ -85,14 +77,12 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
       const data = await response.json();
       const text = data.text;
 
-      // Update this speaker's Gemini history
       selfHistory.current = [
         ...selfHistory.current,
         { role: 'user', parts: [{ text: userMsg }] },
         { role: 'model', parts: [{ text }] },
       ];
 
-      // Store what this speaker just said for the other's next turn
       if (isA) lastSaidA.current = text;
       else lastSaidB.current = text;
 
@@ -129,13 +119,10 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
 
   const handleContinue = () => {
     const interject = userInput.trim() || null;
-
-    // Show user message in chat if they wrote something
     if (interject) {
       setMessages(prev => [...prev, { speaker: 'USER', object_type: 'YOU', text: interject }]);
-      pendingInterject.current = interject; // store in ref so speakTurn reads it
+      pendingInterject.current = interject;
     }
-
     setUserInput('');
     speakTurn(currentSpeaker);
   };
@@ -188,40 +175,44 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
   const colorB = 'text-neon-cyan';
 
   return (
-    <div className="absolute inset-0 m-4 sm:m-8 panel-bg border border-neon-cyan/50 flex flex-col pointer-events-auto shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden">
+    <div className="absolute inset-0 m-2 sm:m-6 md:m-10 lg:m-16 panel-bg border border-neon-cyan/50 flex flex-col pointer-events-auto shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden">
+
       {/* Header */}
-      <div className="bg-neon-cyan/10 border-b border-neon-cyan/30 px-4 py-3 flex justify-between items-center min-w-0">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+      <div className="bg-neon-cyan/10 border-b border-neon-cyan/30 px-3 sm:px-4 py-3 flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
           <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse flex-none"></div>
           <span className={`font-mono text-xs font-bold uppercase tracking-wider truncate ${colorA}`}>{objectA.object_type}</span>
           <span className="font-mono text-xs text-white/30 flex-none">×</span>
           <span className={`font-mono text-xs font-bold uppercase tracking-wider truncate ${colorB}`}>{objectB.object_type}</span>
         </div>
-        <button onClick={handleClose} className="flex-none ml-2 text-gray-400 hover:text-neon-magenta transition-colors font-mono text-sm uppercase px-2 py-1">
-          [End]
+        <button
+          onClick={handleClose}
+          className="flex-none ml-1 text-gray-400 hover:text-neon-magenta transition-colors font-mono text-xs uppercase px-2 py-1 border border-gray-600/40 hover:border-neon-magenta/50 rounded whitespace-nowrap"
+        >
+          ✕ END
         </button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-sm">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 font-mono text-sm">
         {messages.map((msg, i) => {
           const isUser = msg.speaker === 'USER';
           const isA = msg.speaker === 'A';
           return (
-            <div key={i} className={`max-w-[85%] ${isUser ? 'ml-auto text-right' : isA ? 'mr-auto' : 'ml-auto'}`}>
+            <div key={i} className={`max-w-[90%] sm:max-w-[85%] ${isUser ? 'ml-auto text-right' : isA ? 'mr-auto' : 'ml-auto'}`}>
               <div className={`text-[10px] mb-1 opacity-60 uppercase ${
                 isUser ? 'text-white/40' : isA ? colorA : colorB
               }`}>
                 {msg.object_type}
               </div>
-              <div className={`p-3 rounded inline-block ${
+              <div className={`p-2 sm:p-3 rounded inline-block ${
                 isUser
                   ? 'bg-white/10 border border-white/20 text-white'
                   : `bg-black/50 border ${isA ? 'border-neon-magenta/30' : 'border-neon-cyan/30'} text-gray-200`
               }`}>
                 {isUser
                   ? <span className="whitespace-pre-wrap text-sm">{msg.text}</span>
-                  : <span className="chromatic font-serif italic text-base leading-relaxed whitespace-pre-wrap">{msg.text}</span>
+                  : <span className="chromatic font-serif italic text-sm sm:text-base leading-relaxed whitespace-pre-wrap">{msg.text}</span>
                 }
               </div>
             </div>
@@ -229,11 +220,11 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
         })}
 
         {turnState === 'speaking' && (
-          <div className={`mr-auto max-w-[85%] ${currentSpeaker === 'B' ? 'ml-auto mr-0' : ''}`}>
+          <div className={`mr-auto max-w-[90%] sm:max-w-[85%] ${currentSpeaker === 'B' ? 'ml-auto mr-0' : ''}`}>
             <div className={`text-[10px] mb-1 opacity-60 uppercase ${currentSpeaker === 'A' ? colorA : colorB}`}>
               {currentSpeaker === 'A' ? objectA.object_type : objectB.object_type}
             </div>
-            <div className="p-3 rounded bg-black/50 border border-neon-cyan/30 text-gray-200">
+            <div className="p-2 sm:p-3 rounded bg-black/50 border border-neon-cyan/30 text-gray-200">
               <span className="animate-pulse">_SPEAKING...</span>
             </div>
           </div>
@@ -244,13 +235,12 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
             CONNECTION LOST — try again
           </div>
         )}
-
         <div ref={endRef} />
       </div>
 
-      {/* Paused — show interject + continue */}
+      {/* Paused controls */}
       {turnState === 'paused' && (
-        <div className="p-4 bg-black/60 border-t border-neon-cyan/20 space-y-3">
+        <div className="p-2 sm:p-4 bg-black/60 border-t border-neon-cyan/20 space-y-2 sm:space-y-3">
           <div className="flex gap-2">
             <button
               type="button"
@@ -273,12 +263,12 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
               onChange={e => setUserInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleContinue(); }}
               placeholder={isTranscribing ? 'Transcribing...' : 'Interject (optional)...'}
-              className="flex-1 bg-transparent border border-white/10 rounded px-3 py-2 font-mono text-xs text-white focus:outline-none focus:border-neon-cyan placeholder-gray-700"
+              className="flex-1 min-w-0 bg-transparent border border-white/10 rounded px-3 py-2 font-mono text-xs text-white focus:outline-none focus:border-neon-cyan placeholder-gray-700"
             />
           </div>
           <button
             onClick={handleContinue}
-            className="w-full py-3 font-mono text-sm tracking-widest uppercase border border-neon-cyan/50 text-neon-cyan hover:bg-neon-cyan/10 hover:border-neon-cyan hover:shadow-[0_0_15px_rgba(0,245,255,0.15)] transition-all rounded"
+            className="w-full py-2 sm:py-3 font-mono text-xs sm:text-sm tracking-widest uppercase border border-neon-cyan/50 text-neon-cyan hover:bg-neon-cyan/10 hover:border-neon-cyan hover:shadow-[0_0_15px_rgba(0,245,255,0.15)] transition-all rounded"
           >
             {userInput.trim() ? '[ INTERJECT + CONTINUE → ]' : '[ CONTINUE → ]'}
           </button>
@@ -287,8 +277,8 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
 
       {/* Speaking — locked */}
       {turnState === 'speaking' && (
-        <div className="p-4 bg-black/60 border-t border-neon-cyan/20">
-          <div className="w-full py-3 font-mono text-sm tracking-widest uppercase text-center text-white/20 border border-white/5 rounded">
+        <div className="p-2 sm:p-4 bg-black/60 border-t border-neon-cyan/20">
+          <div className="w-full py-2 sm:py-3 font-mono text-xs sm:text-sm tracking-widest uppercase text-center text-white/20 border border-white/5 rounded">
             TRANSMITTING...
           </div>
         </div>
