@@ -28,7 +28,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
   const audioChunksRef = useRef([]);
   const currentAudioRef = useRef(null);
   const messagesRef = useRef(messages);
-  const isMounted = useRef(true); // guards async audio play after unmount
+  const isMounted = useRef(true);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
@@ -72,7 +72,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
     setInputVal('');
     setIsTyping(true);
     const result = await sendMessage(text);
-    if (!isMounted.current) return; // component unmounted while waiting
+    if (!isMounted.current) return;
     if (result) {
       const replyText = result.text || result;
       const replyLang = result.language || 'english';
@@ -94,11 +94,10 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, voice, vocal_direction: vocalDirection })
         });
-        // Check mounted AFTER the async fetch resolves
         if (!isMounted.current) return;
         if (response.ok) {
           const audioBlob = await response.blob();
-          if (!isMounted.current) return; // check again after blob read
+          if (!isMounted.current) return;
           const audioUrl = URL.createObjectURL(audioBlob);
           const audio = new Audio(audioUrl);
           currentAudioRef.current = audio;
@@ -154,24 +153,31 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
   };
 
   return (
-    <div className="absolute inset-0 m-4 sm:m-8 panel-bg border border-neon-cyan/50 flex flex-col pointer-events-auto shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden">
-      <div className="bg-neon-cyan/10 border-b border-neon-cyan/30 px-4 py-3 flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse"></div>
-          <span className="font-mono text-sm tracking-wider uppercase text-neon-cyan font-bold">
+    // Reduced margin on mobile (m-2) so panel has more room, sm:m-6 on larger
+    <div className="absolute inset-0 m-2 sm:m-6 panel-bg border border-neon-cyan/50 flex flex-col pointer-events-auto shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden">
+
+      {/* Header — min-w-0 + truncate on object name ensures Terminate always visible */}
+      <div className="bg-neon-cyan/10 border-b border-neon-cyan/30 px-3 py-3 flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse flex-none"></div>
+          <span className="font-mono text-xs tracking-wider uppercase text-neon-cyan font-bold truncate">
             LINK: {visionData.object_type}
           </span>
         </div>
-        <button onClick={handleClose} className="text-gray-400 hover:text-neon-magenta transition-colors font-mono text-sm uppercase px-2 py-1">
-          [Terminate]
+        {/* Terminate — flex-none so it never gets squeezed off screen */}
+        <button
+          onClick={handleClose}
+          className="flex-none text-gray-400 hover:text-neon-magenta transition-colors font-mono text-xs uppercase px-2 py-1 border border-gray-600/40 hover:border-neon-magenta/50 rounded"
+        >
+          ✕ END
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-sm custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-3 space-y-4 font-mono text-sm custom-scrollbar">
         {messages.map((msg, i) => (
-          <div key={i} className={`max-w-[85%] ${msg.role === 'user' ? 'ml-auto text-right' : 'mr-auto text-left'}`}>
+          <div key={i} className={`max-w-[88%] ${msg.role === 'user' ? 'ml-auto text-right' : 'mr-auto text-left'}`}>
             <div className={`text-[10px] mb-1 opacity-50 uppercase ${msg.role === 'user' ? 'text-neon-blue' : 'text-neon-cyan'}`}>
-              {msg.role === 'user' ? 'USER' : visionData.object_type}
+              {msg.role === 'user' ? 'YOU' : visionData.object_type}
             </div>
             <div className={`p-3 rounded inline-block ${
               msg.role === 'user'
@@ -186,7 +192,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
           </div>
         ))}
         {(isTyping || isTranscribing) && (
-          <div className="mr-auto text-left max-w-[85%]">
+          <div className="mr-auto text-left max-w-[88%]">
             <div className="text-[10px] mb-1 opacity-50 uppercase text-neon-cyan">
               {isTranscribing ? 'SYSTEM' : visionData.object_type}
             </div>
@@ -198,7 +204,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
         <div ref={endOfChatRef} />
       </div>
 
-      <div className="p-4 bg-black/60 border-t border-neon-cyan/20 space-y-3">
+      <div className="p-3 bg-black/60 border-t border-neon-cyan/20 space-y-2">
         <button
           type="button"
           onMouseDown={startRecording}
@@ -222,7 +228,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
             type="text"
             value={inputVal}
             onChange={e => setInputVal(e.target.value)}
-            className="flex-1 bg-transparent border border-neon-cyan/50 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-neon-cyan shadow-[inset_0_0_5px_rgba(0,245,255,0.1)] transition-colors placeholder-gray-600"
+            className="flex-1 bg-transparent border border-neon-cyan/50 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-neon-cyan shadow-[inset_0_0_5px_rgba(0,245,255,0.1)] transition-colors placeholder-gray-600 min-w-0"
             placeholder="Or type a message..."
             disabled={isRecording || isTranscribing}
             maxLength={250}
@@ -230,7 +236,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
           <button
             type="submit"
             disabled={isTyping || !inputVal.trim() || isRecording || isTranscribing}
-            className="px-4 py-2 bg-neon-cyan/20 hover:bg-neon-cyan/40 text-neon-cyan font-mono text-sm border border-neon-cyan/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase"
+            className="flex-none px-3 py-2 bg-neon-cyan/20 hover:bg-neon-cyan/40 text-neon-cyan font-mono text-sm border border-neon-cyan/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase"
           >
             [Send]
           </button>
