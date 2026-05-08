@@ -28,8 +28,8 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
   const audioChunksRef = useRef([]);
   const currentAudioRef = useRef(null);
   const messagesRef = useRef(messages);
+  const isMounted = useRef(true); // guards async audio play after unmount
 
-  // Keep messagesRef in sync so we can read latest on close
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const voice = visionData.voice || 'diana';
@@ -39,13 +39,16 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
     endOfChatRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // Auto-play opening line only when starting fresh (not resuming)
   useEffect(() => {
+    isMounted.current = true;
     const isResuming = initialMessages && initialMessages.length > 0;
     if (!isResuming && visionData.opening_line) {
       speakReply(visionData.opening_line, 'english');
     }
-    return () => stopAudio();
+    return () => {
+      isMounted.current = false;
+      stopAudio();
+    };
   }, []);
 
   const stopAudio = () => {
@@ -59,7 +62,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
 
   const handleClose = () => {
     stopAudio();
-    // Pass current messages back to App for history saving
     onClose(messagesRef.current);
   };
 
@@ -70,6 +72,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
     setInputVal('');
     setIsTyping(true);
     const result = await sendMessage(text);
+    if (!isMounted.current) return; // component unmounted while waiting
     if (result) {
       const replyText = result.text || result;
       const replyLang = result.language || 'english';
@@ -91,8 +94,11 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, voice, vocal_direction: vocalDirection })
         });
+        // Check mounted AFTER the async fetch resolves
+        if (!isMounted.current) return;
         if (response.ok) {
           const audioBlob = await response.blob();
+          if (!isMounted.current) return; // check again after blob read
           const audioUrl = URL.createObjectURL(audioBlob);
           const audio = new Audio(audioUrl);
           currentAudioRef.current = audio;
@@ -104,6 +110,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
         console.warn('Groq TTS failed, falling back to Web Speech:', err);
       }
     }
+    if (!isMounted.current) return;
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.9;
@@ -148,7 +155,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
 
   return (
     <div className="absolute inset-0 m-4 sm:m-8 panel-bg border border-neon-cyan/50 flex flex-col pointer-events-auto shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden">
-      {/* Header */}
       <div className="bg-neon-cyan/10 border-b border-neon-cyan/30 px-4 py-3 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse"></div>
@@ -161,7 +167,6 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
         </button>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-sm custom-scrollbar">
         {messages.map((msg, i) => (
           <div key={i} className={`max-w-[85%] ${msg.role === 'user' ? 'ml-auto text-right' : 'mr-auto text-left'}`}>
@@ -193,9 +198,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
         <div ref={endOfChatRef} />
       </div>
 
-      {/* Input area */}
       <div className="p-4 bg-black/60 border-t border-neon-cyan/20 space-y-3">
-        {/* HOLD TO SPEAK — full width, prominent */}
         <button
           type="button"
           onMouseDown={startRecording}
@@ -211,14 +214,9 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
               : 'bg-transparent border border-neon-magenta/40 text-neon-magenta/70 hover:bg-neon-magenta/10 hover:border-neon-magenta hover:text-neon-magenta hover:shadow-[0_0_15px_rgba(255,0,200,0.2)]'
           } disabled:opacity-40 disabled:cursor-not-allowed`}
         >
-          {isRecording
-            ? '● RECORDING — release to send'
-            : isTranscribing
-            ? '⟳ TRANSCRIBING...'
-            : '🎙 HOLD TO SPEAK'}
+          {isRecording ? '● RECORDING — release to send' : isTranscribing ? '⟳ TRANSCRIBING...' : '🎙 HOLD TO SPEAK'}
         </button>
 
-        {/* Text input row */}
         <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2">
           <input
             type="text"
