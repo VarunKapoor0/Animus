@@ -15,7 +15,6 @@ function toBCP47(language) {
 
 export default function ChatPanel({ visionData, sendMessage, transcribeAudio, initialMessages, onClose }) {
   const defaultMessages = [{ role: 'assistant', text: visionData.opening_line }];
-
   const [messages, setMessages] = useState(
     initialMessages && initialMessages.length > 0 ? initialMessages : defaultMessages
   );
@@ -42,13 +41,8 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
   useEffect(() => {
     isMounted.current = true;
     const isResuming = initialMessages && initialMessages.length > 0;
-    if (!isResuming && visionData.opening_line) {
-      speakReply(visionData.opening_line, 'english');
-    }
-    return () => {
-      isMounted.current = false;
-      stopAudio();
-    };
+    if (!isResuming && visionData.opening_line) speakReply(visionData.opening_line, 'english');
+    return () => { isMounted.current = false; stopAudio(); };
   }, []);
 
   const stopAudio = () => {
@@ -60,10 +54,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   };
 
-  const handleClose = () => {
-    stopAudio();
-    onClose(messagesRef.current);
-  };
+  const handleClose = () => { stopAudio(); onClose(messagesRef.current); };
 
   const handleSend = async (messageText) => {
     const text = messageText || inputVal;
@@ -105,9 +96,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
           audio.play();
           return;
         }
-      } catch (err) {
-        console.warn('Groq TTS failed, falling back to Web Speech:', err);
-      }
+      } catch (err) { console.warn('Groq TTS failed:', err); }
     }
     if (!isMounted.current) return;
     if ('speechSynthesis' in window) {
@@ -127,9 +116,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
       audioChunksRef.current = [];
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
@@ -140,9 +127,7 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
       };
       mediaRecorder.start();
       setIsRecording(true);
-    } catch (err) {
-      console.error('Microphone access error:', err);
-    }
+    } catch (err) { console.error('Mic error:', err); }
   };
 
   const stopRecording = () => {
@@ -153,94 +138,101 @@ export default function ChatPanel({ visionData, sendMessage, transcribeAudio, in
   };
 
   return (
-    <div className="absolute inset-0 m-2 sm:m-6 md:m-10 lg:m-16 panel-bg border border-neon-cyan/50 flex flex-col pointer-events-auto shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden">
-
-      {/* Header */}
-      <div className="bg-neon-cyan/10 border-b border-neon-cyan/30 px-3 sm:px-4 py-3 flex items-center gap-2">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse flex-none"></div>
-          <span className="font-mono text-xs sm:text-sm tracking-wider uppercase text-neon-cyan font-bold truncate">
-            LINK: {visionData.object_type}
-          </span>
-        </div>
-        <button
-          onClick={handleClose}
-          className="flex-none text-gray-400 hover:text-neon-magenta transition-colors font-mono text-xs uppercase px-2 py-1 border border-gray-600/40 hover:border-neon-magenta/50 rounded whitespace-nowrap"
-        >
-          ✕ END
-        </button>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 font-mono text-sm custom-scrollbar">
-        {messages.map((msg, i) => (
-          <div key={i} className={`max-w-[90%] sm:max-w-[85%] ${msg.role === 'user' ? 'ml-auto text-right' : 'mr-auto text-left'}`}>
-            <div className={`text-[10px] mb-1 opacity-50 uppercase ${msg.role === 'user' ? 'text-neon-blue' : 'text-neon-cyan'}`}>
-              {msg.role === 'user' ? 'YOU' : visionData.object_type}
-            </div>
-            <div className={`p-2 sm:p-3 rounded inline-block ${
-              msg.role === 'user'
-                ? 'bg-neon-blue/20 border border-neon-blue/30 text-white'
-                : 'bg-black/50 border border-neon-cyan/30 text-gray-200 shadow-[inset_0_0_10px_rgba(0,245,255,0.05)]'
-            }`}>
-              {msg.role === 'assistant'
-                ? <span className="chromatic font-serif italic text-sm sm:text-base leading-relaxed whitespace-pre-wrap">{msg.text}</span>
-                : <span className="whitespace-pre-wrap text-sm">{msg.text}</span>
-              }
-            </div>
+    // Use fixed positioning with dvh so keyboard doesn't push content off screen
+    <div
+      className="fixed inset-x-0 bottom-0 top-0 flex items-stretch justify-center pointer-events-none"
+      style={{ zIndex: 30 }}
+    >
+      <div
+        className="pointer-events-auto w-full max-w-2xl mx-auto my-2 sm:my-6 md:my-10 panel-bg border border-neon-cyan/50 flex flex-col shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden"
+        style={{ maxHeight: 'calc(100dvh - 16px)' }}
+      >
+        {/* Header — always visible, never squeezed */}
+        <div className="flex-none bg-neon-cyan/10 border-b border-neon-cyan/30 px-3 py-2 flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse flex-none" />
+            <span className="font-mono text-xs tracking-wider uppercase text-neon-cyan font-bold truncate">
+              LINK: {visionData.object_type}
+            </span>
           </div>
-        ))}
-        {(isTyping || isTranscribing) && (
-          <div className="mr-auto text-left max-w-[90%] sm:max-w-[85%]">
-            <div className="text-[10px] mb-1 opacity-50 uppercase text-neon-cyan">
-              {isTranscribing ? 'SYSTEM' : visionData.object_type}
-            </div>
-            <div className="p-2 sm:p-3 rounded bg-black/50 border border-neon-cyan/30 text-gray-200">
-              <span className="animate-pulse">{isTranscribing ? '_TRANSCRIBING...' : '_PROCESSING...'}</span>
-            </div>
-          </div>
-        )}
-        <div ref={endOfChatRef} />
-      </div>
-
-      {/* Input area */}
-      <div className="p-2 sm:p-3 bg-black/60 border-t border-neon-cyan/20 space-y-2">
-        <button
-          type="button"
-          onMouseDown={startRecording}
-          onMouseUp={stopRecording}
-          onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
-          onTouchEnd={stopRecording}
-          disabled={isTyping || isTranscribing}
-          className={`w-full py-2 sm:py-3 font-mono text-xs sm:text-sm tracking-widest uppercase transition-all duration-150 select-none rounded ${
-            isRecording
-              ? 'bg-neon-magenta/20 border border-neon-magenta text-neon-magenta shadow-[0_0_20px_rgba(255,0,200,0.3)] animate-pulse'
-              : isTranscribing
-              ? 'bg-neon-cyan/10 border border-neon-cyan/40 text-neon-cyan/60 cursor-wait'
-              : 'bg-transparent border border-neon-magenta/40 text-neon-magenta/70 hover:bg-neon-magenta/10 hover:border-neon-magenta hover:text-neon-magenta hover:shadow-[0_0_15px_rgba(255,0,200,0.2)]'
-          } disabled:opacity-40 disabled:cursor-not-allowed`}
-        >
-          {isRecording ? '● RECORDING — release to send' : isTranscribing ? '⟳ TRANSCRIBING...' : '🎙 HOLD TO SPEAK'}
-        </button>
-
-        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2">
-          <input
-            type="text"
-            value={inputVal}
-            onChange={e => setInputVal(e.target.value)}
-            className="flex-1 min-w-0 bg-transparent border border-neon-cyan/50 rounded px-2 sm:px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-neon-cyan shadow-[inset_0_0_5px_rgba(0,245,255,0.1)] transition-colors placeholder-gray-600"
-            placeholder="Or type a message..."
-            disabled={isRecording || isTranscribing}
-            maxLength={250}
-          />
           <button
-            type="submit"
-            disabled={isTyping || !inputVal.trim() || isRecording || isTranscribing}
-            className="flex-none px-2 sm:px-4 py-2 bg-neon-cyan/20 hover:bg-neon-cyan/40 text-neon-cyan font-mono text-xs sm:text-sm border border-neon-cyan/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase"
+            onClick={handleClose}
+            className="flex-none px-3 py-1.5 font-mono text-xs uppercase text-neon-magenta border border-neon-magenta/50 hover:bg-neon-magenta/10 rounded transition-colors whitespace-nowrap"
           >
-            [Send]
+            ✕ END
           </button>
-        </form>
+        </div>
+
+        {/* Messages — scrollable middle section */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 font-mono text-sm">
+          {messages.map((msg, i) => (
+            <div key={i} className={`max-w-[88%] ${msg.role === 'user' ? 'ml-auto text-right' : 'mr-auto text-left'}`}>
+              <div className={`text-[10px] mb-1 opacity-50 uppercase ${msg.role === 'user' ? 'text-neon-blue' : 'text-neon-cyan'}`}>
+                {msg.role === 'user' ? 'YOU' : visionData.object_type}
+              </div>
+              <div className={`p-2 rounded inline-block ${
+                msg.role === 'user'
+                  ? 'bg-neon-blue/20 border border-neon-blue/30 text-white'
+                  : 'bg-black/50 border border-neon-cyan/30 text-gray-200'
+              }`}>
+                {msg.role === 'assistant'
+                  ? <span className="chromatic font-serif italic text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</span>
+                  : <span className="whitespace-pre-wrap text-sm">{msg.text}</span>
+                }
+              </div>
+            </div>
+          ))}
+          {(isTyping || isTranscribing) && (
+            <div className="mr-auto text-left max-w-[88%]">
+              <div className="text-[10px] mb-1 opacity-50 uppercase text-neon-cyan">
+                {isTranscribing ? 'SYSTEM' : visionData.object_type}
+              </div>
+              <div className="p-2 rounded bg-black/50 border border-neon-cyan/30 text-gray-200">
+                <span className="animate-pulse">{isTranscribing ? '_TRANSCRIBING...' : '_PROCESSING...'}</span>
+              </div>
+            </div>
+          )}
+          <div ref={endOfChatRef} />
+        </div>
+
+        {/* Input — always anchored to bottom, never hidden */}
+        <div className="flex-none p-2 bg-black/60 border-t border-neon-cyan/20 space-y-2">
+          <button
+            type="button"
+            onMouseDown={startRecording}
+            onMouseUp={stopRecording}
+            onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
+            onTouchEnd={stopRecording}
+            disabled={isTyping || isTranscribing}
+            className={`w-full py-2.5 font-mono text-xs tracking-widest uppercase transition-all select-none rounded ${
+              isRecording
+                ? 'bg-neon-magenta/20 border border-neon-magenta text-neon-magenta animate-pulse'
+                : isTranscribing
+                ? 'bg-neon-cyan/10 border border-neon-cyan/40 text-neon-cyan/60 cursor-wait'
+                : 'bg-transparent border border-neon-magenta/40 text-neon-magenta/70 hover:bg-neon-magenta/10 hover:border-neon-magenta hover:text-neon-magenta'
+            } disabled:opacity-40`}
+          >
+            {isRecording ? '● RECORDING — release to send' : isTranscribing ? '⟳ TRANSCRIBING...' : '🎙 HOLD TO SPEAK'}
+          </button>
+          <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2">
+            <input
+              type="text"
+              value={inputVal}
+              onChange={e => setInputVal(e.target.value)}
+              className="flex-1 min-w-0 bg-transparent border border-neon-cyan/50 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-neon-cyan placeholder-gray-600"
+              placeholder="Or type a message..."
+              disabled={isRecording || isTranscribing}
+              maxLength={250}
+            />
+            <button
+              type="submit"
+              disabled={isTyping || !inputVal.trim() || isRecording || isTranscribing}
+              className="flex-none px-3 py-2 bg-neon-cyan/20 hover:bg-neon-cyan/40 text-neon-cyan font-mono text-sm border border-neon-cyan/50 rounded transition-colors disabled:opacity-50 uppercase"
+            >
+              [Send]
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

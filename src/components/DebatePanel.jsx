@@ -72,20 +72,16 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
           }
         })
       });
-
       if (!response.ok) throw new Error('Debate API error');
       const data = await response.json();
       const text = data.text;
-
       selfHistory.current = [
         ...selfHistory.current,
         { role: 'user', parts: [{ text: userMsg }] },
         { role: 'model', parts: [{ text }] },
       ];
-
       if (isA) lastSaidA.current = text;
       else lastSaidB.current = text;
-
       setMessages(prev => [...prev, { speaker, object_type: self.object_type, text }]);
       await playTTS(text, self.voice, self.vocal_direction);
       setCurrentSpeaker(isA ? 'B' : 'A');
@@ -112,9 +108,7 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
         audio.onended = () => URL.revokeObjectURL(url);
         await audio.play();
       }
-    } catch (err) {
-      console.warn('TTS failed:', err);
-    }
+    } catch (err) { console.warn('TTS failed:', err); }
   };
 
   const handleContinue = () => {
@@ -175,114 +169,115 @@ export default function DebatePanel({ objectA, objectB, transcribeAudio, onClose
   const colorB = 'text-neon-cyan';
 
   return (
-    <div className="absolute inset-0 m-2 sm:m-6 md:m-10 lg:m-16 panel-bg border border-neon-cyan/50 flex flex-col pointer-events-auto shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden">
-
-      {/* Header */}
-      <div className="bg-neon-cyan/10 border-b border-neon-cyan/30 px-3 sm:px-4 py-3 flex items-center gap-2 min-w-0">
-        <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
-          <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse flex-none"></div>
-          <span className={`font-mono text-xs font-bold uppercase tracking-wider truncate ${colorA}`}>{objectA.object_type}</span>
-          <span className="font-mono text-xs text-white/30 flex-none">×</span>
-          <span className={`font-mono text-xs font-bold uppercase tracking-wider truncate ${colorB}`}>{objectB.object_type}</span>
-        </div>
-        <button
-          onClick={handleClose}
-          className="flex-none ml-1 text-gray-400 hover:text-neon-magenta transition-colors font-mono text-xs uppercase px-2 py-1 border border-gray-600/40 hover:border-neon-magenta/50 rounded whitespace-nowrap"
-        >
-          ✕ END
-        </button>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 font-mono text-sm">
-        {messages.map((msg, i) => {
-          const isUser = msg.speaker === 'USER';
-          const isA = msg.speaker === 'A';
-          return (
-            <div key={i} className={`max-w-[90%] sm:max-w-[85%] ${isUser ? 'ml-auto text-right' : isA ? 'mr-auto' : 'ml-auto'}`}>
-              <div className={`text-[10px] mb-1 opacity-60 uppercase ${
-                isUser ? 'text-white/40' : isA ? colorA : colorB
-              }`}>
-                {msg.object_type}
-              </div>
-              <div className={`p-2 sm:p-3 rounded inline-block ${
-                isUser
-                  ? 'bg-white/10 border border-white/20 text-white'
-                  : `bg-black/50 border ${isA ? 'border-neon-magenta/30' : 'border-neon-cyan/30'} text-gray-200`
-              }`}>
-                {isUser
-                  ? <span className="whitespace-pre-wrap text-sm">{msg.text}</span>
-                  : <span className="chromatic font-serif italic text-sm sm:text-base leading-relaxed whitespace-pre-wrap">{msg.text}</span>
-                }
-              </div>
-            </div>
-          );
-        })}
-
-        {turnState === 'speaking' && (
-          <div className={`mr-auto max-w-[90%] sm:max-w-[85%] ${currentSpeaker === 'B' ? 'ml-auto mr-0' : ''}`}>
-            <div className={`text-[10px] mb-1 opacity-60 uppercase ${currentSpeaker === 'A' ? colorA : colorB}`}>
-              {currentSpeaker === 'A' ? objectA.object_type : objectB.object_type}
-            </div>
-            <div className="p-2 sm:p-3 rounded bg-black/50 border border-neon-cyan/30 text-gray-200">
-              <span className="animate-pulse">_SPEAKING...</span>
-            </div>
-          </div>
-        )}
-
-        {turnState === 'error' && (
-          <div className="text-center font-mono text-xs text-neon-magenta py-2">
-            CONNECTION LOST — try again
-          </div>
-        )}
-        <div ref={endRef} />
-      </div>
-
-      {/* Paused controls */}
-      {turnState === 'paused' && (
-        <div className="p-2 sm:p-4 bg-black/60 border-t border-neon-cyan/20 space-y-2 sm:space-y-3">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onMouseDown={startRecording}
-              onMouseUp={stopRecording}
-              onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
-              onTouchEnd={stopRecording}
-              disabled={isTranscribing}
-              className={`flex-none px-3 py-2 font-mono text-xs border rounded transition-all select-none ${
-                isRecording
-                  ? 'bg-neon-magenta/20 border-neon-magenta text-neon-magenta animate-pulse'
-                  : 'border-neon-magenta/30 text-neon-magenta/50 hover:border-neon-magenta hover:text-neon-magenta'
-              }`}
-            >
-              {isRecording ? '●' : '🎙'}
-            </button>
-            <input
-              type="text"
-              value={userInput}
-              onChange={e => setUserInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleContinue(); }}
-              placeholder={isTranscribing ? 'Transcribing...' : 'Interject (optional)...'}
-              className="flex-1 min-w-0 bg-transparent border border-white/10 rounded px-3 py-2 font-mono text-xs text-white focus:outline-none focus:border-neon-cyan placeholder-gray-700"
-            />
+    <div
+      className="fixed inset-x-0 bottom-0 top-0 flex items-stretch justify-center pointer-events-none"
+      style={{ zIndex: 30 }}
+    >
+      <div
+        className="pointer-events-auto w-full max-w-2xl mx-auto my-2 sm:my-6 md:my-10 panel-bg border border-neon-cyan/50 flex flex-col shadow-[0_0_15px_rgba(0,245,255,0.1)] rounded overflow-hidden"
+        style={{ maxHeight: 'calc(100dvh - 16px)' }}
+      >
+        {/* Header */}
+        <div className="flex-none bg-neon-cyan/10 border-b border-neon-cyan/30 px-3 py-2 flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse flex-none" />
+            <span className={`font-mono text-xs font-bold uppercase tracking-wider truncate ${colorA}`}>{objectA.object_type}</span>
+            <span className="font-mono text-xs text-white/30 flex-none">×</span>
+            <span className={`font-mono text-xs font-bold uppercase tracking-wider truncate ${colorB}`}>{objectB.object_type}</span>
           </div>
           <button
-            onClick={handleContinue}
-            className="w-full py-2 sm:py-3 font-mono text-xs sm:text-sm tracking-widest uppercase border border-neon-cyan/50 text-neon-cyan hover:bg-neon-cyan/10 hover:border-neon-cyan hover:shadow-[0_0_15px_rgba(0,245,255,0.15)] transition-all rounded"
+            onClick={handleClose}
+            className="flex-none px-3 py-1.5 font-mono text-xs uppercase text-neon-magenta border border-neon-magenta/50 hover:bg-neon-magenta/10 rounded transition-colors whitespace-nowrap"
           >
-            {userInput.trim() ? '[ INTERJECT + CONTINUE → ]' : '[ CONTINUE → ]'}
+            ✕ END
           </button>
         </div>
-      )}
 
-      {/* Speaking — locked */}
-      {turnState === 'speaking' && (
-        <div className="p-2 sm:p-4 bg-black/60 border-t border-neon-cyan/20">
-          <div className="w-full py-2 sm:py-3 font-mono text-xs sm:text-sm tracking-widest uppercase text-center text-white/20 border border-white/5 rounded">
-            TRANSMITTING...
-          </div>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 font-mono text-sm">
+          {messages.map((msg, i) => {
+            const isUser = msg.speaker === 'USER';
+            const isA = msg.speaker === 'A';
+            return (
+              <div key={i} className={`max-w-[88%] ${isUser ? 'ml-auto text-right' : isA ? 'mr-auto' : 'ml-auto'}`}>
+                <div className={`text-[10px] mb-1 opacity-60 uppercase ${
+                  isUser ? 'text-white/40' : isA ? colorA : colorB
+                }`}>
+                  {msg.object_type}
+                </div>
+                <div className={`p-2 rounded inline-block ${
+                  isUser
+                    ? 'bg-white/10 border border-white/20 text-white'
+                    : `bg-black/50 border ${isA ? 'border-neon-magenta/30' : 'border-neon-cyan/30'} text-gray-200`
+                }`}>
+                  {isUser
+                    ? <span className="whitespace-pre-wrap text-sm">{msg.text}</span>
+                    : <span className="chromatic font-serif italic text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</span>
+                  }
+                </div>
+              </div>
+            );
+          })}
+          {turnState === 'speaking' && (
+            <div className={`max-w-[88%] ${currentSpeaker === 'B' ? 'ml-auto' : 'mr-auto'}`}>
+              <div className={`text-[10px] mb-1 opacity-60 uppercase ${currentSpeaker === 'A' ? colorA : colorB}`}>
+                {currentSpeaker === 'A' ? objectA.object_type : objectB.object_type}
+              </div>
+              <div className="p-2 rounded bg-black/50 border border-neon-cyan/30 text-gray-200">
+                <span className="animate-pulse">_SPEAKING...</span>
+              </div>
+            </div>
+          )}
+          {turnState === 'error' && (
+            <div className="text-center font-mono text-xs text-neon-magenta py-2">CONNECTION LOST — try again</div>
+          )}
+          <div ref={endRef} />
         </div>
-      )}
+
+        {/* Controls — always anchored to bottom */}
+        {turnState === 'paused' && (
+          <div className="flex-none p-2 bg-black/60 border-t border-neon-cyan/20 space-y-2">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onMouseDown={startRecording}
+                onMouseUp={stopRecording}
+                onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
+                onTouchEnd={stopRecording}
+                disabled={isTranscribing}
+                className={`flex-none px-3 py-2 font-mono text-xs border rounded transition-all select-none ${
+                  isRecording
+                    ? 'bg-neon-magenta/20 border-neon-magenta text-neon-magenta animate-pulse'
+                    : 'border-neon-magenta/30 text-neon-magenta/50 hover:border-neon-magenta hover:text-neon-magenta'
+                }`}
+              >
+                {isRecording ? '●' : '🎙'}
+              </button>
+              <input
+                type="text"
+                value={userInput}
+                onChange={e => setUserInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleContinue(); }}
+                placeholder={isTranscribing ? 'Transcribing...' : 'Interject (optional)...'}
+                className="flex-1 min-w-0 bg-transparent border border-white/10 rounded px-3 py-2 font-mono text-xs text-white focus:outline-none focus:border-neon-cyan placeholder-gray-700"
+              />
+            </div>
+            <button
+              onClick={handleContinue}
+              className="w-full py-2.5 font-mono text-xs tracking-widest uppercase border border-neon-cyan/50 text-neon-cyan hover:bg-neon-cyan/10 hover:border-neon-cyan transition-all rounded"
+            >
+              {userInput.trim() ? '[ INTERJECT + CONTINUE → ]' : '[ CONTINUE → ]'}
+            </button>
+          </div>
+        )}
+        {turnState === 'speaking' && (
+          <div className="flex-none p-2 bg-black/60 border-t border-neon-cyan/20">
+            <div className="w-full py-2.5 font-mono text-xs tracking-widest uppercase text-center text-white/20 border border-white/5 rounded">
+              TRANSMITTING...
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
