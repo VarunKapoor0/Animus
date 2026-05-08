@@ -78,12 +78,41 @@ Speak in Hindi, it responds in Hindi. Speak in Spanish, it responds in Spanish. 
 
 ## Architecture
 
+### Frontend structure
+
+```
+src/
+├── App.jsx                  # Lean layout/routing shell (~110 lines)
+├── hooks/
+│   ├── useAnimusState.js    # All domain state + handlers (extracted from App)
+│   ├── useGemini.js         # Vision, chat, debate API calls + conversation state
+│   ├── useWebXR.js          # AR session management, hit testing, marker positions
+│   ├── useAudio.js          # Orpheus TTS + Web Speech fallback, isMounted guard
+│   └── useRecording.js      # Microphone recording + Whisper transcription
+├── components/
+│   ├── LandingPage.jsx      # Entry page with concept explanation
+│   ├── Camera.jsx           # Camera feed + captureFrame()
+│   ├── ChatPanel.jsx        # Solo object conversation UI
+│   ├── DebatePanel.jsx      # Dual-object conversation UI
+│   ├── ObjectCard.jsx       # Scanned object card with personality + CTA
+│   ├── DebatePrompt.jsx     # Connect/Talk alone prompt after second scan
+│   ├── ScanHistory.jsx      # Bottom strip of past conversations
+│   ├── SpatialMarkers.jsx   # Floating AR markers on camera view
+│   ├── TapRipple.jsx        # Neon ripple on tap
+│   ├── BoundingBox.jsx      # Scan target box + recognition beat
+│   └── AROverlay.jsx        # Three.js canvas mount point
+└── lib/
+    └── three-scene.js       # ARSceneManager — WebXR session, hit testing, 3D markers
+```
+
+### Request flow
+
 ```
 Landing page → [INITIATE] → camera view
 
 Camera feed (browser MediaDevices API)
     ↓ screen tap or scan button
-Tap ripple effect → frame capture → base64 JPEG
+useAnimusState → TapRipple effect → captureFrame() → base64 JPEG
     ↓
 /api/gemini — action: 'vision'
     Gemini identifies object, generates personality, opening line, voice, vocal_direction
@@ -91,19 +120,32 @@ Tap ripple effect → frame capture → base64 JPEG
 ObjectCard → [INITIATE LINK]
     ↓
     ├─ Solo: ChatPanel
-    │       Object speaks opening line via Orpheus TTS automatically
-    │       Hold mic → /api/transcribe (Groq Whisper) → language detected
-    │       /api/gemini chat → 3-sentence response (sentences 1+2 ≤155 chars, spoken aloud)
-    │       /api/speak → Orpheus TTS with matched voice + vocal direction
-    │       [Terminate] → saves to scan history + spatial marker
+    │       useAudio → speakReply(opening_line) on mount
+    │       useRecording → hold mic → /api/transcribe (Groq Whisper) → language detected
+    │       /api/gemini — action: 'chat' → 3-sentence response (sentences 1+2 ≤155 chars)
+    │       useAudio → speakReply(response, language, voice, vocal_direction)
+    │           ├─ English: /api/speak → Orpheus TTS wav → Audio()
+    │           └─ Non-English / fallback: Web Speech API with BCP-47 lang tag
+    │       [✕ END] → saves to scan history + spatial marker → useAnimusState
     │
-    └─ Connect: DebatePanel (if history exists)
-            Object A speaks → pause → user optionally interjects → [CONTINUE]
-            Object B responds to A + user → pause → [CONTINUE]
-            Alternates until [End]
+    └─ Connect: DebatePanel (if scan history exists)
+            useAnimusState → DebatePrompt (dropdown if multiple history items)
+            Object A turn → /api/gemini debate → useAudio speakReply
+            pause → user optionally interjects (text or mic) → [CONTINUE →]
+            Object B responds to A + user interject → useAudio speakReply
+            alternates until [✕ END]
 
-/api/speak — sanitizes text, extracts first 2 sentences, prepends [direction] tag, calls Orpheus
-    fallback: Web Speech API with BCP-47 language tag
+/api/speak
+    sanitizeForTTS() → extractFirstTwoSentences() → [direction] tag prepend
+    → Groq Orpheus (≤199 chars) → wav → stream to client
+
+WebXR path (Android Chrome + ARCore only)
+    useWebXR → navigator.xr.requestSession('immersive-ar')
+    ARSceneManager → hit test source → reticle on detected surface
+    on scan: captureHitPosition() → THREE.Vector3 world position
+    on terminate: addARMarker() → 3D sphere in scene
+    getMarkerScreenPositions() → projected 2D coords → SpatialMarkers DOM labels
+    Fallback (all other devices): screen clientX/clientY stored in markers array
 ```
 
 ---
@@ -116,7 +158,7 @@ ObjectCard → [INITIATE LINK]
 | `/api/transcribe` | Groq Whisper STT — returns transcript + detected language |
 | `/api/speak` | Groq Orpheus TTS — returns wav audio |
 
-All routes are Vercel serverless functions. The backend is stateless — conversation history, detected language, and voice data are maintained client-side and passed per request.
+All routes are Vercel serverless functions. The backend is stateless — conversation history, detected language, and voice data are maintained client-side and passed per request. Primary model is `gemini-2.5-flash` with automatic fallback to `gemini-2.5-flash-lite` on 503.
 
 ---
 
