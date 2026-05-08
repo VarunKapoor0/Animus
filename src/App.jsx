@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Camera from './components/Camera';
 import ScanButton from './components/ScanButton';
 import GlitchText from './components/GlitchText';
@@ -33,6 +33,8 @@ function App() {
   const [markers, setMarkers] = useState([]);
   const [resumedMessages, setResumedMessages] = useState(null);
   const [showDebatePrompt, setShowDebatePrompt] = useState(false);
+  // Track whether the scan came from a real screen tap or the scan button
+  const tapFromScreen = useRef(false);
 
   const { isProcessing, error, identifyObject, startConversation, sendMessage, transcribeAudio } = useGemini();
   const {
@@ -58,6 +60,7 @@ function App() {
         setTapWorldPos(null);
         setResumedMessages(null);
         setShowDebatePrompt(false);
+        tapFromScreen.current = false;
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -94,6 +97,7 @@ function App() {
   const handleScreenTap = (e) => {
     if (isProcessing || visionData || chatActive || debateActive) return;
     const pos = { x: e.clientX, y: e.clientY };
+    tapFromScreen.current = true; // real tap — save spatial marker
     setTapPos(pos);
     setRipplePos(pos);
     setRippleTrigger(k => k + 1);
@@ -101,6 +105,7 @@ function App() {
   };
 
   const handleScanButton = (img) => {
+    tapFromScreen.current = false; // scan button — no spatial marker, just history
     const pos = centerPos();
     setTapPos(pos);
     setRipplePos(pos);
@@ -139,22 +144,32 @@ function App() {
         messages: savedMessages || [],
         worldPos: tapWorldPos || null,
       };
+
+      // Always save to history strip
       setScanHistory(prev => {
         const filtered = prev.filter(h => h.object_type !== entry.object_type);
         return [entry, ...filtered].slice(0, MAX_HISTORY);
       });
-      const markerPos = tapPos || centerPos();
-      setMarkers(prev => {
-        const filtered = prev.filter(m => m.object_type !== entry.object_type);
-        return [{ ...entry, x: markerPos.x, y: markerPos.y }, ...filtered].slice(0, MAX_MARKERS);
-      });
-      if (isARActive && tapWorldPos) addARMarker(visionData.object_type, tapWorldPos);
+
+      // Only save spatial marker if scan came from a real screen tap
+      if (tapFromScreen.current && tapPos) {
+        setMarkers(prev => {
+          const filtered = prev.filter(m => m.object_type !== entry.object_type);
+          return [{ ...entry, x: tapPos.x, y: tapPos.y }, ...filtered].slice(0, MAX_MARKERS);
+        });
+      }
+
+      // Place AR marker if in AR mode with a real world position
+      if (isARActive && tapWorldPos) {
+        addARMarker(visionData.object_type, tapWorldPos);
+      }
     }
     setChatActive(false);
     setVisionData(null);
     setTapPos(null);
     setTapWorldPos(null);
     setResumedMessages(null);
+    tapFromScreen.current = false;
   };
 
   const handleCloseDebate = (debateEntry) => {
@@ -164,12 +179,14 @@ function App() {
     setVisionData(null);
     setTapPos(null);
     setTapWorldPos(null);
+    tapFromScreen.current = false;
   };
 
   const handleMarkerTap = async (marker) => {
     if (chatActive || debateActive || isProcessing) return;
     if (marker.worldPos && isARActive) setTapWorldPos(marker.worldPos);
     setTapPos({ x: marker.x, y: marker.y });
+    tapFromScreen.current = true;
     setVisionData({
       object_type: marker.object_type,
       personality_summary: marker.personality_summary,
@@ -184,6 +201,7 @@ function App() {
 
   const handleResume = async (historyItem) => {
     if (historyItem.isDebate) return;
+    tapFromScreen.current = false;
     setVisionData({
       object_type: historyItem.object_type,
       personality_summary: historyItem.personality_summary,
@@ -202,14 +220,12 @@ function App() {
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-sans scanlines">
-      {/* React camera — hidden in AR mode, WebXR handles passthrough */}
       <Camera hidden={isARActive} />
 
       {isIdle && (
         <div className="absolute inset-0 z-10 pointer-events-auto cursor-crosshair" onClick={handleScreenTap} />
       )}
 
-      {/* Pass isARActive so Three.js canvas z-index is elevated in AR mode */}
       <AROverlay containerRef={containerRef} isARActive={isARActive}>
         <TapRipple x={ripplePos.x} y={ripplePos.y} trigger={rippleTrigger} />
 
