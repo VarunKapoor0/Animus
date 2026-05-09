@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CHANGELOG } from '../changelog';
 import AnimatedBackground from './AnimatedBackground';
 
@@ -10,6 +10,12 @@ const TYPE_STYLES = {
 
 export default function ChangelogPage({ onBack }) {
   const [dark, setDark] = useState(true);
+
+  // Override body overflow so the changelog page can scroll
+  useEffect(() => {
+    document.body.style.overflow = 'auto';
+    return () => { document.body.style.overflow = 'hidden'; };
+  }, []);
 
   const bg = dark ? '#080b14' : '#f0f4f8';
   const borderColor = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)';
@@ -39,7 +45,6 @@ export default function ChangelogPage({ onBack }) {
     >
       <AnimatedBackground dark={dark} />
 
-      {/* Scanlines */}
       <div className="pointer-events-none fixed inset-0" style={{
         zIndex: 1,
         background: dark
@@ -81,9 +86,8 @@ export default function ChangelogPage({ onBack }) {
           </div>
         </div>
 
-        {/* Content — scrolls naturally */}
+        {/* Content */}
         <div className="max-w-2xl mx-auto w-full px-4 sm:px-8 py-12 sm:py-16">
-
           <div className="mb-12">
             <h1
               className="font-mono font-bold tracking-[0.2em] text-3xl sm:text-4xl mb-3 transition-colors duration-500"
