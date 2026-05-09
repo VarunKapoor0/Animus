@@ -1,1 +1,6 @@
-{\n  \"rewrites\": [\n    { \"source\": \"/changelog\", \"destination\": \"/index.html\" },\n    { \"source\": \"/(.*)\", \"destination\": \"/index.html\" }\n  ]\n}\n
+{
+  "rewrites": [
+    { "source": "/changelog", "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
