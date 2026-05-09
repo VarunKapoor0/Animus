@@ -3,7 +3,7 @@
 
 Point your camera at any object. Animus identifies it, gives it a personality, and lets you have a full voice conversation with it. The microphone knows what it does for a living. The coffee mug has thoughts about your caffeine dependency. The desk lamp has feelings about being ignored.
 
-**[Live Demo →](https://animus-jade.vercel.app)**
+**[Live Demo →](https://animusai.app)**
 
 ---
 
@@ -50,7 +50,7 @@ Speak in Hindi, it responds in Hindi. Speak in Spanish, it responds in Spanish. 
 - Fallback to screen-coordinate markers on all other devices
 
 **Landing page**
-- Explains the concept before asking for camera permission
+- Animated particle network background, light/dark theme toggle
 - Back button returns to landing page from camera view
 
 ---
@@ -88,13 +88,15 @@ src/
 │   ├── useGemini.js         # Vision, chat, debate API calls + conversation state
 │   ├── useWebXR.js          # AR session management, hit testing, marker positions
 │   ├── useAudio.js          # Orpheus TTS + Web Speech fallback, isMounted guard
-│   └── useRecording.js      # Microphone recording + Whisper transcription
+│   ├── useRecording.js      # Microphone recording + Whisper transcription
+│   └── useShare.js          # Canvas card generation, Web Share API, X intent
 ├── components/
-│   ├── LandingPage.jsx      # Entry page with concept explanation
+│   ├── LandingPage.jsx      # Entry page — particle animation, light/dark toggle
+│   ├── AnimatedBackground   # Canvas particle network + scan pulse
 │   ├── Camera.jsx           # Camera feed + captureFrame()
 │   ├── ChatPanel.jsx        # Solo object conversation UI
 │   ├── DebatePanel.jsx      # Dual-object conversation UI
-│   ├── ObjectCard.jsx       # Scanned object card with personality + CTA
+│   ├── ObjectCard.jsx       # Scanned object card with personality + share
 │   ├── DebatePrompt.jsx     # Connect/Talk alone prompt after second scan
 │   ├── ScanHistory.jsx      # Bottom strip of past conversations
 │   ├── SpatialMarkers.jsx   # Floating AR markers on camera view
@@ -117,7 +119,7 @@ useAnimusState → TapRipple effect → captureFrame() → base64 JPEG
 /api/gemini — action: 'vision'
     Gemini identifies object, generates personality, opening line, voice, vocal_direction
     ↓
-ObjectCard → [INITIATE LINK]
+ObjectCard → [INITIATE LINK] or [Share] or [Post on X]
     ↓
     ├─ Solo: ChatPanel
     │       useAudio → speakReply(opening_line) on mount
