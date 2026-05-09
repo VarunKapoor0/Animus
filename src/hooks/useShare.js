@@ -1,6 +1,5 @@
 // useShare — generates a shareable card image and triggers share/download.
 // Uses Canvas API to render the card client-side.
-// Falls back gracefully across mobile/desktop.
 
 function wrapText(ctx, text, maxWidth) {
   const words = text.split(' ');
@@ -27,22 +26,18 @@ export async function generateShareCard(objectType, openingLine) {
   canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  // ── Background ──────────────────────────────────────────
   ctx.fillStyle = '#080b14';
   ctx.fillRect(0, 0, W, H);
 
-  // Scanlines
   ctx.fillStyle = 'rgba(0, 245, 255, 0.02)';
   for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
 
-  // Radial glow
   const glow = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.6);
   glow.addColorStop(0, 'rgba(0, 245, 255, 0.05)');
   glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
-  // ── Corner brackets ──────────────────────────────────────
   const bSize = 60;
   const bOff = 48;
   ctx.strokeStyle = 'rgba(0, 245, 255, 0.45)';
@@ -57,24 +52,18 @@ export async function generateShareCard(objectType, openingLine) {
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3); ctx.stroke();
   }
 
-  // ── Layout zones ─────────────────────────────────────────
-  // Top zone:    y 160–260  → object label
-  // Middle zone: y 280–800  → quote (grows downward, capped)
-  // Bottom zone: y 860–980  → branding
   const LABEL_Y = 200;
   const QUOTE_START_Y = 300;
   const QUOTE_MAX_BOTTOM = 800;
   const BRAND_Y = 900;
 
-  // ── Object type label ─────────────────────────────────────
   ctx.font = 'bold 26px monospace';
   ctx.textAlign = 'center';
-  const labelText = objectType.toUpperCase().slice(0, 30); // cap length
+  const labelText = objectType.toUpperCase().slice(0, 30);
   const labelMetrics = ctx.measureText(labelText);
   const labelPadX = 32;
-  const labelPadY = 14;
-  const labelW = labelMetrics.width + labelPadX * 2;
   const labelH = 44;
+  const labelW = labelMetrics.width + labelPadX * 2;
   const labelX = W / 2 - labelW / 2;
   const labelBoxY = LABEL_Y - labelH + 8;
 
@@ -86,25 +75,19 @@ export async function generateShareCard(objectType, openingLine) {
   ctx.fillStyle = '#00f5ff';
   ctx.fillText(labelText, W / 2, LABEL_Y);
 
-  // ── Quote — compute lines first, then position ────────────
-  // Adjust font size if opening line is very long
   const quote = `"${openingLine}"`;
   const maxQuoteWidth = W - 160;
   const lineHeight = 60;
-
   let fontSize = 44;
   ctx.font = `italic ${fontSize}px Georgia, serif`;
   let lines = wrapText(ctx, quote, maxQuoteWidth);
-  const totalH = lines.length * lineHeight;
 
-  // If text overflows the middle zone, shrink font
-  while (totalH > QUOTE_MAX_BOTTOM - QUOTE_START_Y && fontSize > 28) {
+  while (lines.length * lineHeight > QUOTE_MAX_BOTTOM - QUOTE_START_Y && fontSize > 28) {
     fontSize -= 3;
     ctx.font = `italic ${fontSize}px Georgia, serif`;
     lines = wrapText(ctx, quote, maxQuoteWidth);
   }
 
-  // Center the wrapped block vertically within the middle zone
   const midZoneCenter = (QUOTE_START_Y + QUOTE_MAX_BOTTOM) / 2;
   const recalcHeight = lines.length * lineHeight;
   let textY = midZoneCenter - recalcHeight / 2 + lineHeight * 0.8;
@@ -124,8 +107,6 @@ export async function generateShareCard(objectType, openingLine) {
   ctx.shadowBlur = 0;
   ctx.shadowOffsetX = 0;
 
-  // ── Branding ──────────────────────────────────────────────
-  // Divider
   ctx.strokeStyle = 'rgba(0, 245, 255, 0.18)';
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -133,16 +114,14 @@ export async function generateShareCard(objectType, openingLine) {
   ctx.lineTo(W / 2 + 72, BRAND_Y - 32);
   ctx.stroke();
 
-  // ANIMUS wordmark
   ctx.font = 'bold 20px monospace';
   ctx.fillStyle = 'rgba(0, 245, 255, 0.55)';
   ctx.textAlign = 'center';
   ctx.fillText('A N I M U S', W / 2, BRAND_Y);
 
-  // URL
   ctx.font = '16px monospace';
   ctx.fillStyle = 'rgba(255,255,255,0.18)';
-  ctx.fillText('animus-jade.vercel.app', W / 2, BRAND_Y + 32);
+  ctx.fillText('animusai.app', W / 2, BRAND_Y + 32);
 
   return canvas;
 }
@@ -151,19 +130,17 @@ export async function shareCard(objectType, openingLine) {
   const canvas = await generateShareCard(objectType, openingLine);
   const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
   const file = new File([blob], 'animus.png', { type: 'image/png' });
-  const shareText = `"${openingLine}" — ${objectType} on Animus\n\nanimus-jade.vercel.app`;
+  const shareText = `"${openingLine}" — ${objectType} on Animus\n\nanimusai.app`;
 
-  // Try Web Share API with image (mobile)
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: 'Animus', text: shareText });
       return;
     } catch (err) {
-      if (err.name === 'AbortError') return; // user cancelled
+      if (err.name === 'AbortError') return;
     }
   }
 
-  // Fallback: download the image
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -174,6 +151,6 @@ export async function shareCard(objectType, openingLine) {
 
 export function shareToX(objectType, openingLine) {
   const text = encodeURIComponent(`"${openingLine.slice(0, 200)}"\n\n— ${objectType} on Animus`);
-  const url = encodeURIComponent('https://animus-jade.vercel.app');
+  const url = encodeURIComponent('https://animusai.app');
   window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank');
 }
