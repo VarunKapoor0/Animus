@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import AnimatedBackground from './AnimatedBackground';
 
 export default function LandingPage({ onEnter }) {
   const [glitch, setGlitch] = useState(false);
@@ -18,7 +19,6 @@ export default function LandingPage({ onEnter }) {
     return () => clearTimeout(t);
   }, []);
 
-  // Theme tokens
   const theme = {
     bg: dark ? '#080b14' : '#f0f4f8',
     scanlineColor: dark ? 'rgba(0,245,255,0.015)' : 'rgba(0,120,200,0.04)',
@@ -57,151 +57,146 @@ export default function LandingPage({ onEnter }) {
       className="relative w-screen h-screen overflow-hidden flex flex-col transition-colors duration-500"
       style={{ background: theme.bg }}
     >
-      {/* Scanlines */}
-      <div className="pointer-events-none absolute inset-0 z-50" style={{
+      {/* Animated background — particle network + scan pulse */}
+      <AnimatedBackground dark={dark} />
+
+      {/* Scanlines overlay */}
+      <div className="pointer-events-none absolute inset-0" style={{
+        zIndex: 1,
         background: `repeating-linear-gradient(0deg, transparent, transparent 2px, ${theme.scanlineColor} 2px, ${theme.scanlineColor} 4px)`,
       }} />
 
       {/* Radial glow */}
       <div className="pointer-events-none absolute inset-0 transition-all duration-500" style={{
+        zIndex: 1,
         background: `radial-gradient(ellipse 60% 50% at 50% 50%, ${theme.glowColor} 0%, transparent 70%)`,
       }} />
 
-      {/* Top bar */}
-      <div
-        className="flex justify-between items-center px-4 sm:px-6 py-4"
-        style={{ borderBottom: `1px solid ${theme.borderColor}` }}
-      >
-        <span className="font-mono text-xs tracking-widest" style={{ color: theme.labelColor }}>
-          ANIMUS_OS_v1.0
-        </span>
-        <div className="flex items-center gap-3">
-          {/* Light/dark toggle */}
-          <button
-            onClick={() => setDark(d => !d)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded font-mono text-[10px] tracking-widest uppercase transition-all duration-200"
-            style={{
-              background: theme.toggleBg,
-              border: `1px solid ${theme.toggleBorder}`,
-              color: theme.toggleColor,
-            }}
-            title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {dark ? '◑ Light' : '◐ Dark'}
-          </button>
-          <div className="flex items-center gap-2">
-            <div
-              className="w-1.5 h-1.5 rounded-full animate-pulse"
-              style={{ background: theme.dotColor }}
-            />
-            <span className="font-mono text-xs tracking-widest" style={{ color: theme.readyColor }}>
-              READY
-            </span>
+      {/* All UI content above animations */}
+      <div className="relative flex flex-col h-full" style={{ zIndex: 2 }}>
+
+        {/* Top bar */}
+        <div
+          className="flex justify-between items-center px-4 sm:px-6 py-4"
+          style={{ borderBottom: `1px solid ${theme.borderColor}` }}
+        >
+          <span className="font-mono text-xs tracking-widest" style={{ color: theme.labelColor }}>
+            ANIMUS_OS_v1.0
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setDark(d => !d)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded font-mono text-[10px] tracking-widest uppercase transition-all duration-200"
+              style={{
+                background: theme.toggleBg,
+                border: `1px solid ${theme.toggleBorder}`,
+                color: theme.toggleColor,
+              }}
+            >
+              {dark ? '\u25d1 Light' : '\u25d0 Dark'}
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: theme.dotColor }} />
+              <span className="font-mono text-xs tracking-widest" style={{ color: theme.readyColor }}>READY</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Main content */}
-      <div className={`flex-1 flex flex-col items-center justify-center px-6 sm:px-8 transition-opacity duration-700 ${
-        booted ? 'opacity-100' : 'opacity-0'
-      }`}>
+        {/* Main content */}
+        <div className={`flex-1 flex flex-col items-center justify-center px-6 sm:px-8 transition-opacity duration-700 ${
+          booted ? 'opacity-100' : 'opacity-0'
+        }`}>
 
-        {/* Title */}
-        <div className="mb-8 text-center">
-          <h1
-            className="font-mono font-bold tracking-[0.3em] text-5xl md:text-7xl transition-colors duration-500"
+          <div className="mb-8 text-center">
+            <h1
+              className="font-mono font-bold tracking-[0.3em] text-5xl md:text-7xl"
+              style={{
+                color: theme.titleColor,
+                textShadow: theme.titleGlow,
+                transition: 'text-shadow 0.05s, color 0.5s',
+              }}
+            >
+              ANIMUS
+            </h1>
+          </div>
+
+          <div className="w-16 h-px mb-8 transition-all duration-500" style={{ background: theme.dividerColor }} />
+
+          <p
+            className="font-serif italic text-xl md:text-2xl text-center mb-3 leading-relaxed transition-all duration-500"
+            style={{ color: theme.taglineColor, textShadow: theme.taglineShadow }}
+          >
+            Every object has a story.
+          </p>
+          <p
+            className="font-mono text-sm text-center mb-10 sm:mb-12 transition-all duration-500"
+            style={{ color: theme.subtitleColor, letterSpacing: '0.15em' }}
+          >
+            POINT YOUR CAMERA · LISTEN · SPEAK BACK
+          </p>
+
+          <button
+            onClick={onEnter}
+            className="font-mono text-sm tracking-widest uppercase px-8 sm:px-10 py-4 transition-all duration-300"
             style={{
-              color: theme.titleColor,
-              textShadow: theme.titleGlow,
-              transition: 'text-shadow 0.05s, color 0.5s',
+              border: `1px solid ${theme.ctaBorder}`,
+              color: theme.ctaColor,
+              background: 'transparent',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = theme.ctaHoverBg;
+              e.currentTarget.style.boxShadow = theme.ctaHoverShadow;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.boxShadow = 'none';
             }}
           >
-            ANIMUS
-          </h1>
+            [ INITIATE ]
+          </button>
+
+          <div className="flex items-center gap-4 sm:gap-6 mt-10 sm:mt-12 flex-wrap justify-center">
+            {[
+              { icon: '\ud83c\udf99', label: 'Voice' },
+              { icon: '\ud83c\udf10', label: 'Multilingual' },
+              { icon: '\u25c8', label: 'AI Personality' },
+            ].map(({ icon, label }) => (
+              <div key={label} className="flex items-center gap-1.5">
+                <span className="text-xs" style={{ opacity: 0.4 }}>{icon}</span>
+                <span
+                  className="font-mono text-xs tracking-widest transition-colors duration-500"
+                  style={{ color: theme.featureColor }}
+                >
+                  {label.toUpperCase()}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Divider */}
-        <div className="w-16 h-px mb-8 transition-all duration-500" style={{ background: theme.dividerColor }} />
-
-        {/* Tagline */}
-        <p
-          className="font-serif italic text-xl md:text-2xl text-center mb-3 leading-relaxed transition-all duration-500"
-          style={{ color: theme.taglineColor, textShadow: theme.taglineShadow }}
+        {/* Bottom bar */}
+        <div
+          className="px-4 sm:px-6 py-4 flex justify-between items-center"
+          style={{ borderTop: `1px solid ${theme.borderColor}` }}
         >
-          Every object has a story.
-        </p>
-        <p
-          className="font-mono text-sm text-center mb-10 sm:mb-12 transition-all duration-500"
-          style={{ color: theme.subtitleColor, letterSpacing: '0.15em' }}
-        >
-          POINT YOUR CAMERA · LISTEN · SPEAK BACK
-        </p>
-
-        {/* CTA */}
-        <button
-          onClick={onEnter}
-          className="font-mono text-sm tracking-widest uppercase px-8 sm:px-10 py-4 transition-all duration-300"
-          style={{
-            border: `1px solid ${theme.ctaBorder}`,
-            color: theme.ctaColor,
-            background: 'transparent',
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = theme.ctaHoverBg;
-            e.currentTarget.style.boxShadow = theme.ctaHoverShadow;
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        >
-          [ INITIATE ]
-        </button>
-
-        {/* Feature hints */}
-        <div className="flex items-center gap-4 sm:gap-6 mt-10 sm:mt-12 flex-wrap justify-center">
-          {[
-            { icon: '🎙', label: 'Voice' },
-            { icon: '🌐', label: 'Multilingual' },
-            { icon: '◈', label: 'AI Personality' },
-          ].map(({ icon, label }) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <span className="text-xs" style={{ opacity: 0.4 }}>{icon}</span>
-              <span
-                className="font-mono text-xs tracking-widest transition-colors duration-500"
-                style={{ color: theme.featureColor }}
-              >
-                {label.toUpperCase()}
-              </span>
-            </div>
-          ))}
+          <a
+            href="https://varkapoor.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-xs tracking-widest uppercase transition-colors duration-200"
+            style={{ color: theme.creditColor }}
+            onMouseEnter={e => e.currentTarget.style.color = theme.creditHoverColor}
+            onMouseLeave={e => e.currentTarget.style.color = theme.creditColor}
+          >
+            Built by Varun Kapoor
+          </a>
+          <span
+            className="font-mono text-xs transition-colors duration-500"
+            style={{ color: theme.footerColor, letterSpacing: '0.1em' }}
+          >
+            AI · CAMERA · VOICE
+          </span>
         </div>
-      </div>
-
-      {/* Bottom bar — credit + footer */}
-      <div
-        className="px-4 sm:px-6 py-4 flex justify-between items-center"
-        style={{ borderTop: `1px solid ${theme.borderColor}` }}
-      >
-        {/* Built by credit */}
-        <a
-          href="https://varkapoor.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-mono text-xs tracking-widest uppercase transition-colors duration-200"
-          style={{ color: theme.creditColor }}
-          onMouseEnter={e => e.currentTarget.style.color = theme.creditHoverColor}
-          onMouseLeave={e => e.currentTarget.style.color = theme.creditColor}
-        >
-          Built by Varun Kapoor
-        </a>
-
-        <span
-          className="font-mono text-xs transition-colors duration-500"
-          style={{ color: theme.footerColor, letterSpacing: '0.1em' }}
-        >
-          AI · CAMERA · VOICE
-        </span>
       </div>
     </div>
   );
