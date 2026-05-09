@@ -4,7 +4,17 @@ import AnimatedBackground from './AnimatedBackground';
 export default function LandingPage({ onEnter }) {
   const [glitch, setGlitch] = useState(false);
   const [booted, setBooted] = useState(false);
-  const [dark, setDark] = useState(false);
+  // Read from localStorage, default to light
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem('animus-theme') === 'dark'; }
+    catch { return false; }
+  });
+
+  const toggleDark = () => {
+    const next = !dark;
+    setDark(next);
+    try { localStorage.setItem('animus-theme', next ? 'dark' : 'light'); } catch {}
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -73,7 +83,6 @@ export default function LandingPage({ onEnter }) {
 
       <div className="relative flex flex-col h-full" style={{ zIndex: 2 }}>
 
-        {/* Top bar */}
         <div
           className="flex justify-between items-center px-4 sm:px-6 py-4"
           style={{ borderBottom: `1px solid ${theme.borderColor}` }}
@@ -82,7 +91,6 @@ export default function LandingPage({ onEnter }) {
             ANIMUS_OS_v1.0
           </span>
           <div className="flex items-center gap-3">
-            {/* Changelog link */}
             <a
               href="/changelog"
               className="font-mono text-[10px] tracking-widest uppercase transition-colors duration-200"
@@ -92,9 +100,8 @@ export default function LandingPage({ onEnter }) {
             >
               Changelog
             </a>
-            {/* Theme toggle */}
             <button
-              onClick={() => setDark(d => !d)}
+              onClick={toggleDark}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded font-mono text-[10px] tracking-widest uppercase transition-all duration-200"
               style={{
                 background: theme.toggleBg,
@@ -102,7 +109,7 @@ export default function LandingPage({ onEnter }) {
                 color: theme.toggleColor,
               }}
             >
-              {dark ? '\u25d1 Light' : '\u25d0 Dark'}
+              {dark ? '◑ Light' : '◐ Dark'}
             </button>
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: theme.dotColor }} />
@@ -111,11 +118,9 @@ export default function LandingPage({ onEnter }) {
           </div>
         </div>
 
-        {/* Main content */}
         <div className={`flex-1 flex flex-col items-center justify-center px-6 sm:px-8 transition-opacity duration-700 ${
           booted ? 'opacity-100' : 'opacity-0'
         }`}>
-
           <div className="mb-8 text-center">
             <h1
               className="font-mono font-bold tracking-[0.3em] text-5xl md:text-7xl"
@@ -166,9 +171,9 @@ export default function LandingPage({ onEnter }) {
 
           <div className="flex items-center gap-4 sm:gap-6 mt-10 sm:mt-12 flex-wrap justify-center">
             {[
-              { icon: '\ud83c\udf99', label: 'Voice' },
-              { icon: '\ud83c\udf10', label: 'Multilingual' },
-              { icon: '\u25c8', label: 'AI Personality' },
+              { icon: '🎙', label: 'Voice' },
+              { icon: '🌐', label: 'Multilingual' },
+              { icon: '◈', label: 'AI Personality' },
             ].map(({ icon, label }) => (
               <div key={label} className="flex items-center gap-1.5">
                 <span className="text-xs" style={{ opacity: 0.4 }}>{icon}</span>
@@ -183,7 +188,6 @@ export default function LandingPage({ onEnter }) {
           </div>
         </div>
 
-        {/* Bottom bar */}
         <div
           className="px-4 sm:px-6 py-4 flex justify-between items-center"
           style={{ borderTop: `1px solid ${theme.borderColor}` }}
