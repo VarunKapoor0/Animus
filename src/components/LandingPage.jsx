@@ -4,7 +4,7 @@ import AnimatedBackground from './AnimatedBackground';
 export default function LandingPage({ onEnter }) {
   const [glitch, setGlitch] = useState(false);
   const [booted, setBooted] = useState(false);
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState(false); // default: light
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -57,25 +57,20 @@ export default function LandingPage({ onEnter }) {
       className="relative w-screen h-screen overflow-hidden flex flex-col transition-colors duration-500"
       style={{ background: theme.bg }}
     >
-      {/* Animated background — particle network + scan pulse */}
       <AnimatedBackground dark={dark} />
 
-      {/* Scanlines overlay */}
       <div className="pointer-events-none absolute inset-0" style={{
         zIndex: 1,
         background: `repeating-linear-gradient(0deg, transparent, transparent 2px, ${theme.scanlineColor} 2px, ${theme.scanlineColor} 4px)`,
       }} />
 
-      {/* Radial glow */}
       <div className="pointer-events-none absolute inset-0 transition-all duration-500" style={{
         zIndex: 1,
         background: `radial-gradient(ellipse 60% 50% at 50% 50%, ${theme.glowColor} 0%, transparent 70%)`,
       }} />
 
-      {/* All UI content above animations */}
       <div className="relative flex flex-col h-full" style={{ zIndex: 2 }}>
 
-        {/* Top bar */}
         <div
           className="flex justify-between items-center px-4 sm:px-6 py-4"
           style={{ borderBottom: `1px solid ${theme.borderColor}` }}
@@ -93,7 +88,7 @@ export default function LandingPage({ onEnter }) {
                 color: theme.toggleColor,
               }}
             >
-              {dark ? '\u25d1 Light' : '\u25d0 Dark'}
+              {dark ? '◑ Light' : '◐ Dark'}
             </button>
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: theme.dotColor }} />
@@ -102,7 +97,6 @@ export default function LandingPage({ onEnter }) {
           </div>
         </div>
 
-        {/* Main content */}
         <div className={`flex-1 flex flex-col items-center justify-center px-6 sm:px-8 transition-opacity duration-700 ${
           booted ? 'opacity-100' : 'opacity-0'
         }`}>
@@ -157,9 +151,9 @@ export default function LandingPage({ onEnter }) {
 
           <div className="flex items-center gap-4 sm:gap-6 mt-10 sm:mt-12 flex-wrap justify-center">
             {[
-              { icon: '\ud83c\udf99', label: 'Voice' },
-              { icon: '\ud83c\udf10', label: 'Multilingual' },
-              { icon: '\u25c8', label: 'AI Personality' },
+              { icon: '🎙', label: 'Voice' },
+              { icon: '🌐', label: 'Multilingual' },
+              { icon: '◈', label: 'AI Personality' },
             ].map(({ icon, label }) => (
               <div key={label} className="flex items-center gap-1.5">
                 <span className="text-xs" style={{ opacity: 0.4 }}>{icon}</span>
@@ -174,7 +168,6 @@ export default function LandingPage({ onEnter }) {
           </div>
         </div>
 
-        {/* Bottom bar */}
         <div
           className="px-4 sm:px-6 py-4 flex justify-between items-center"
           style={{ borderTop: `1px solid ${theme.borderColor}` }}
