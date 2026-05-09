@@ -4,7 +4,7 @@ import AnimatedBackground from './AnimatedBackground';
 export default function LandingPage({ onEnter }) {
   const [glitch, setGlitch] = useState(false);
   const [booted, setBooted] = useState(false);
-  const [dark, setDark] = useState(false); // default: light
+  const [dark, setDark] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -50,6 +50,8 @@ export default function LandingPage({ onEnter }) {
     toggleBg: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
     toggleBorder: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.12)',
     toggleColor: dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.5)',
+    changelogColor: dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.3)',
+    changelogHover: dark ? '#00f5ff' : '#0078c8',
   };
 
   return (
@@ -71,6 +73,7 @@ export default function LandingPage({ onEnter }) {
 
       <div className="relative flex flex-col h-full" style={{ zIndex: 2 }}>
 
+        {/* Top bar */}
         <div
           className="flex justify-between items-center px-4 sm:px-6 py-4"
           style={{ borderBottom: `1px solid ${theme.borderColor}` }}
@@ -79,6 +82,17 @@ export default function LandingPage({ onEnter }) {
             ANIMUS_OS_v1.0
           </span>
           <div className="flex items-center gap-3">
+            {/* Changelog link */}
+            <a
+              href="/changelog"
+              className="font-mono text-[10px] tracking-widest uppercase transition-colors duration-200"
+              style={{ color: theme.changelogColor }}
+              onMouseEnter={e => e.currentTarget.style.color = theme.changelogHover}
+              onMouseLeave={e => e.currentTarget.style.color = theme.changelogColor}
+            >
+              Changelog
+            </a>
+            {/* Theme toggle */}
             <button
               onClick={() => setDark(d => !d)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded font-mono text-[10px] tracking-widest uppercase transition-all duration-200"
@@ -88,7 +102,7 @@ export default function LandingPage({ onEnter }) {
                 color: theme.toggleColor,
               }}
             >
-              {dark ? '◑ Light' : '◐ Dark'}
+              {dark ? '\u25d1 Light' : '\u25d0 Dark'}
             </button>
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: theme.dotColor }} />
@@ -97,6 +111,7 @@ export default function LandingPage({ onEnter }) {
           </div>
         </div>
 
+        {/* Main content */}
         <div className={`flex-1 flex flex-col items-center justify-center px-6 sm:px-8 transition-opacity duration-700 ${
           booted ? 'opacity-100' : 'opacity-0'
         }`}>
@@ -151,9 +166,9 @@ export default function LandingPage({ onEnter }) {
 
           <div className="flex items-center gap-4 sm:gap-6 mt-10 sm:mt-12 flex-wrap justify-center">
             {[
-              { icon: '🎙', label: 'Voice' },
-              { icon: '🌐', label: 'Multilingual' },
-              { icon: '◈', label: 'AI Personality' },
+              { icon: '\ud83c\udf99', label: 'Voice' },
+              { icon: '\ud83c\udf10', label: 'Multilingual' },
+              { icon: '\u25c8', label: 'AI Personality' },
             ].map(({ icon, label }) => (
               <div key={label} className="flex items-center gap-1.5">
                 <span className="text-xs" style={{ opacity: 0.4 }}>{icon}</span>
@@ -168,6 +183,7 @@ export default function LandingPage({ onEnter }) {
           </div>
         </div>
 
+        {/* Bottom bar */}
         <div
           className="px-4 sm:px-6 py-4 flex justify-between items-center"
           style={{ borderTop: `1px solid ${theme.borderColor}` }}
