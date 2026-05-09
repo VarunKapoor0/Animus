@@ -9,9 +9,20 @@ const TYPE_STYLES = {
 };
 
 export default function ChangelogPage({ onBack }) {
-  const [dark, setDark] = useState(true);
+  // Read theme from localStorage so it persists from landing page
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem('animus-theme') === 'dark'; }
+    catch { return false; }
+  });
 
-  // Override body overflow so the changelog page can scroll
+  // Sync theme changes to localStorage
+  const toggleDark = () => {
+    const next = !dark;
+    setDark(next);
+    try { localStorage.setItem('animus-theme', next ? 'dark' : 'light'); } catch {}
+  };
+
+  // Override body overflow so changelog can scroll
   useEffect(() => {
     document.body.style.overflow = 'auto';
     return () => { document.body.style.overflow = 'hidden'; };
@@ -54,7 +65,6 @@ export default function ChangelogPage({ onBack }) {
 
       <div className="relative flex flex-col" style={{ zIndex: 2 }}>
 
-        {/* Sticky top bar */}
         <div
           className="flex justify-between items-center px-4 sm:px-8 py-4 sticky top-0"
           style={{
@@ -77,7 +87,7 @@ export default function ChangelogPage({ onBack }) {
               CHANGELOG
             </span>
             <button
-              onClick={() => setDark(d => !d)}
+              onClick={toggleDark}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded font-mono text-[10px] tracking-widest uppercase transition-all duration-200"
               style={{ background: toggleBg, border: `1px solid ${toggleBorder}`, color: toggleColor }}
             >
@@ -86,7 +96,6 @@ export default function ChangelogPage({ onBack }) {
           </div>
         </div>
 
-        {/* Content */}
         <div className="max-w-2xl mx-auto w-full px-4 sm:px-8 py-12 sm:py-16">
           <div className="mb-12">
             <h1
