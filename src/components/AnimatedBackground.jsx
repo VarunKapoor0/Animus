@@ -1,5 +1,6 @@
 // AnimatedBackground — particle network + scan pulse on canvas.
 // Purely visual, pointer-events none, adapts to dark/light mode.
+// Canvas is fixed to the viewport so it never stretches on scrollable pages.
 
 import { useEffect, useRef } from 'react';
 
@@ -113,11 +114,20 @@ export default function AnimatedBackground({ dark }) {
     };
   }, []);
 
+  // Fixed positioning ensures the canvas always covers the viewport exactly —
+  // never stretches on scrollable pages like the changelog
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 w-full h-full pointer-events-none"
-      style={{ zIndex: 0 }}
+      className="pointer-events-none"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        zIndex: 0,
+      }}
     />
   );
 }
