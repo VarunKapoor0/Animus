@@ -68,6 +68,10 @@ function App() {
 
   if (!landed) return <LandingPage onEnter={handleEnter} />;
 
+  // Show the connect nudge after user has had at least one conversation
+  // Uses the most recent object name so it feels personal and in-context
+  const lastScannedName = scanHistory.length > 0 ? scanHistory[0].object_type : null;
+
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-sans scanlines">
       <Camera hidden={isARActive} />
@@ -161,10 +165,23 @@ function App() {
             )}
           </div>
 
-          <div className="pb-8 flex flex-col items-center gap-4 pointer-events-auto">
+          <div className="pb-8 flex flex-col items-center gap-3 pointer-events-auto">
             {isIdle && (
               <>
                 <ScanHistory history={scanHistory} onResume={handleResume} />
+
+                {/* Connect nudge — shown after first conversation, uses last scanned object name */}
+                {lastScannedName && (
+                  <p className="font-mono text-[10px] text-white/25 tracking-widest uppercase text-center px-4">
+                    Scan another object to connect it with{' '}
+                    <span className="text-neon-cyan/40">
+                      {lastScannedName.length > 20
+                        ? lastScannedName.substring(0, 20) + '...'
+                        : lastScannedName}
+                    </span>
+                  </p>
+                )}
+
                 <ScanButton onScan={handleScanButton} isScanning={isProcessing} />
               </>
             )}
