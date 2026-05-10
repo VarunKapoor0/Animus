@@ -62,6 +62,11 @@ export default function LandingPage({ onEnter }) {
     toggleColor: dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.5)',
     changelogColor: dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.3)',
     changelogHover: dark ? '#00f5ff' : '#0078c8',
+    glassesBg: dark ? 'rgba(0,245,255,0.04)' : 'rgba(0,100,180,0.04)',
+    glassesBorder: dark ? 'rgba(0,245,255,0.15)' : 'rgba(0,100,180,0.15)',
+    glassesText: dark ? 'rgba(0,245,255,0.7)' : 'rgba(0,100,180,0.8)',
+    glassesLink: dark ? '#00f5ff' : '#0078c8',
+    glassesDim: dark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.4)',
   };
 
   return (
@@ -185,6 +190,38 @@ export default function LandingPage({ onEnter }) {
                 </span>
               </div>
             ))}
+          </div>
+
+          {/* Glasses banner */}
+          <div
+            className="mt-8 px-5 py-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 transition-all duration-500"
+            style={{
+              border: `1px solid ${theme.glassesBorder}`,
+              background: theme.glassesBg,
+            }}
+          >
+            <span className="font-mono text-[10px] tracking-widest uppercase" style={{ color: theme.glassesText }}>
+              ◈ Now on Meta Ray-Ban Display glasses
+            </span>
+            <span className="font-mono text-[10px]" style={{ color: theme.glassesDim }}>—</span>
+            <a
+              href="https://varkapoor.com/AnimusGlasses.apk"
+              download
+              className="font-mono text-[10px] tracking-widest uppercase transition-colors duration-200"
+              style={{ color: theme.glassesLink }}
+            >
+              Download APK
+            </a>
+            <span className="font-mono text-[10px]" style={{ color: theme.glassesDim }}>·</span>
+            <a
+              href="https://varkapoor.com/projects/animusglasses"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-[10px] tracking-widest uppercase transition-colors duration-200"
+              style={{ color: theme.glassesLink }}
+            >
+              Setup Guide
+            </a>
           </div>
         </div>
 
