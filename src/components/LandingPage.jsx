@@ -4,7 +4,6 @@ import AnimatedBackground from './AnimatedBackground';
 export default function LandingPage({ onEnter }) {
   const [glitch, setGlitch] = useState(false);
   const [booted, setBooted] = useState(false);
-  // Read from localStorage, default to light
   const [dark, setDark] = useState(() => {
     try { return localStorage.getItem('animus-theme') === 'dark'; }
     catch { return false; }
@@ -62,11 +61,22 @@ export default function LandingPage({ onEnter }) {
     toggleColor: dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.5)',
     changelogColor: dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.3)',
     changelogHover: dark ? '#00f5ff' : '#0078c8',
-    glassesBg: dark ? 'rgba(0,245,255,0.04)' : 'rgba(0,100,180,0.04)',
-    glassesBorder: dark ? 'rgba(0,245,255,0.15)' : 'rgba(0,100,180,0.15)',
-    glassesText: dark ? 'rgba(0,245,255,0.7)' : 'rgba(0,100,180,0.8)',
-    glassesLink: dark ? '#00f5ff' : '#0078c8',
-    glassesDim: dark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.4)',
+    glassesBg: dark ? 'rgba(0,245,255,0.06)' : 'rgba(0,100,180,0.06)',
+    glassesBorder: dark ? 'rgba(0,245,255,0.4)' : 'rgba(0,100,180,0.35)',
+    glassesShadow: dark
+      ? '0 0 30px rgba(0,245,255,0.12), inset 0 0 20px rgba(0,245,255,0.04)'
+      : '0 0 20px rgba(0,100,180,0.08)',
+    glassesLabel: dark ? 'rgba(0,245,255,0.5)' : 'rgba(0,100,180,0.55)',
+    glassesHeading: dark ? '#00f5ff' : '#0060b0',
+    glassesHeadingGlow: dark ? '0 0 20px rgba(0,245,255,0.4)' : 'none',
+    glassesBody: dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)',
+    glassesBtnBg: dark ? 'rgba(0,245,255,0.1)' : 'rgba(0,100,180,0.08)',
+    glassesBtnBorder: dark ? 'rgba(0,245,255,0.6)' : 'rgba(0,100,180,0.5)',
+    glassesBtnColor: dark ? '#00f5ff' : '#0078c8',
+    glassesBtnHoverBg: dark ? 'rgba(0,245,255,0.18)' : 'rgba(0,100,180,0.15)',
+    glassesBtnHoverShadow: dark ? '0 0 20px rgba(0,245,255,0.25)' : '0 0 15px rgba(0,100,180,0.15)',
+    glassesSecondaryColor: dark ? 'rgba(0,245,255,0.6)' : 'rgba(0,100,180,0.65)',
+    glassesSecondaryHover: dark ? '#00f5ff' : '#0060b0',
   };
 
   return (
@@ -88,6 +98,7 @@ export default function LandingPage({ onEnter }) {
 
       <div className="relative flex flex-col h-full" style={{ zIndex: 2 }}>
 
+        {/* Top bar */}
         <div
           className="flex justify-between items-center px-4 sm:px-6 py-4"
           style={{ borderBottom: `1px solid ${theme.borderColor}` }}
@@ -123,9 +134,11 @@ export default function LandingPage({ onEnter }) {
           </div>
         </div>
 
+        {/* Main content */}
         <div className={`flex-1 flex flex-col items-center justify-center px-6 sm:px-8 transition-opacity duration-700 ${
           booted ? 'opacity-100' : 'opacity-0'
         }`}>
+
           <div className="mb-8 text-center">
             <h1
               className="font-mono font-bold tracking-[0.3em] text-5xl md:text-7xl"
@@ -192,39 +205,86 @@ export default function LandingPage({ onEnter }) {
             ))}
           </div>
 
-          {/* Glasses banner */}
+          {/* AnimusGlasses — big feature block */}
           <div
-            className="mt-8 px-5 py-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 transition-all duration-500"
+            className="mt-12 w-full max-w-lg px-7 py-6 transition-all duration-500"
             style={{
               border: `1px solid ${theme.glassesBorder}`,
               background: theme.glassesBg,
+              boxShadow: theme.glassesShadow,
             }}
           >
-            <span className="font-mono text-[10px] tracking-widest uppercase" style={{ color: theme.glassesText }}>
-              ◈ Now on Meta Ray-Ban Display glasses
-            </span>
-            <span className="font-mono text-[10px]" style={{ color: theme.glassesDim }}>—</span>
-            <a
-              href="https://varkapoor.com/AnimusGlasses.apk"
-              download
-              className="font-mono text-[10px] tracking-widest uppercase transition-colors duration-200"
-              style={{ color: theme.glassesLink }}
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: theme.glassesHeading }} />
+              <span className="font-mono text-[10px] tracking-[0.2em] uppercase" style={{ color: theme.glassesLabel }}>
+                New — Hardware Edition
+              </span>
+            </div>
+
+            <p
+              className="font-mono font-bold text-xl sm:text-2xl tracking-widest mb-2 transition-all duration-500"
+              style={{ color: theme.glassesHeading, textShadow: theme.glassesHeadingGlow }}
             >
-              Download APK
-            </a>
-            <span className="font-mono text-[10px]" style={{ color: theme.glassesDim }}>·</span>
-            <a
-              href="https://varkapoor.com/projects/animusglasses"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-[10px] tracking-widest uppercase transition-colors duration-200"
-              style={{ color: theme.glassesLink }}
+              NOW ON META GLASSES
+            </p>
+
+            <p
+              className="font-mono text-xs leading-relaxed mb-5 transition-all duration-500"
+              style={{ color: theme.glassesBody, letterSpacing: '0.05em' }}
             >
-              Setup Guide
-            </a>
+              Animus runs on Meta Ray-Ban Display glasses. Point your glasses at any object —
+              it identifies it and speaks to you in its own voice through the glasses speakers.
+              No screen. Just look and listen.
+            </p>
+
+            <div className="flex flex-wrap gap-3">
+              <a
+                href="https://varkapoor.com/AnimusGlasses.apk"
+                download
+                className="font-mono text-xs tracking-widest uppercase px-5 py-2.5 transition-all duration-200"
+                style={{
+                  border: `1px solid ${theme.glassesBtnBorder}`,
+                  color: theme.glassesBtnColor,
+                  background: theme.glassesBtnBg,
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = theme.glassesBtnHoverBg;
+                  e.currentTarget.style.boxShadow = theme.glassesBtnHoverShadow;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = theme.glassesBtnBg;
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                [ Download APK ]
+              </a>
+              <a
+                href="https://varkapoor.com/projects/animusglasses"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-xs tracking-widest uppercase px-5 py-2.5 transition-all duration-200"
+                style={{
+                  border: `1px solid ${theme.glassesBorder}`,
+                  color: theme.glassesSecondaryColor,
+                  background: 'transparent',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.color = theme.glassesSecondaryHover;
+                  e.currentTarget.style.borderColor = theme.glassesSecondaryHover;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.color = theme.glassesSecondaryColor;
+                  e.currentTarget.style.borderColor = theme.glassesBorder;
+                }}
+              >
+                [ Setup Guide ]
+              </a>
+            </div>
           </div>
+
         </div>
 
+        {/* Footer */}
         <div
           className="px-4 sm:px-6 py-4 flex justify-between items-center"
           style={{ borderTop: `1px solid ${theme.borderColor}` }}
